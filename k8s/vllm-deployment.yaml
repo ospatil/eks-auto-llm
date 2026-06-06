@@ -1,0 +1,104 @@
+# vLLM OpenAI-compatible server, serving the model by STREAMING weights directly
+# from S3 into GPU memory via the Run:ai Model Streamer (--load-format
+# runai_streamer). This is AWS's documented pattern: no init container, no local
+# copy. S3 access uses the model-storage-sa Pod Identity role (read-only).
+#
+# The image and model URI are templated by the deploy script from tofu outputs.
+# If applying by hand, replace __MODEL_S3_URI__ and __VLLM_IMAGE__.
+# The cluster has NO internet egress: the image comes from the ECR pull-through
+# cache (vLLM DLC, prewarmed) and weights stream from S3. The runai_streamer
+# loader fetches from S3 on its own and needs no internet, so we do NOT set
+# HF_HUB_OFFLINE (see the NOTE on the container below for why it breaks s3://).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  namespace: llm
+  labels: { app: vllm }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: vllm }
+  template:
+    metadata:
+      labels: { app: vllm }
+    spec:
+      serviceAccountName: model-storage-sa
+      # Tolerate the GPU NodePool taint so this pod can land on the A10G node.
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: vllm
+          image: __VLLM_IMAGE__
+          # NOTE: do NOT set HF_HUB_OFFLINE/TRANSFORMERS_OFFLINE here. In vLLM
+          # 0.22.0, HF_HUB_OFFLINE forces the raw model string through
+          # snapshot_download() in AsyncEngineArgs.__post_init__, which rejects
+          # an s3:// URI ("Repo id must be in the form ...") and crashes before
+          # the runai S3 loader runs. The runai_streamer path (maybe_pull_model_
+          # tokenizer_for_runai) pulls model+tokenizer from S3 itself and needs
+          # no internet, so offline mode is both unnecessary and breaking here.
+          args:
+            - "--model=__MODEL_S3_URI__"
+            - "--load-format=runai_streamer"
+            # Stable alias clients request in the OpenAI `model` field, instead of
+            # the long s3:// --model path. The Streamlit app's MODEL_NAME
+            # (k8s/streamlit.yaml) must match this value.
+            - "--served-model-name=chat"
+            - "--host=0.0.0.0"
+            - "--port=8000"
+            # 24GB A10G: cap context + leave headroom to avoid KV-cache OOM.
+            - "--max-model-len=8192"
+            - "--gpu-memory-utilization=0.90"
+            - "--tensor-parallel-size=1"
+          ports:
+            - { name: http, containerPort: 8000 }
+          resources:
+            requests:
+              cpu: "4"
+              memory: 24Gi
+              nvidia.com/gpu: 1
+            limits:
+              memory: 24Gi
+              nvidia.com/gpu: 1
+          volumeMounts:
+            # PyTorch shared memory (K8s equivalent of docker --ipc=host).
+            - { name: shm, mountPath: /dev/shm }
+          # Model streaming can take a while on first load; startupProbe gives it
+          # generous time before liveness/readiness take over.
+          startupProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 10
+            failureThreshold: 60 # up to ~10 min to become healthy
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 20
+            timeoutSeconds: 2
+            failureThreshold: 3
+      volumes:
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 8Gi
+---
+# Service is named "llm-api" (NOT "vllm") on purpose: Kubernetes injects
+# legacy Docker-link env vars per Service (e.g. VLLM_PORT=tcp://10.x:8000) named
+# after the Service in UPPERCASE. vLLM reads its own VLLM_PORT config var and
+# crashes on the tcp:// URI. A non-"vllm" Service name avoids the collision.
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-api
+  namespace: llm
+  labels: { app: vllm }
+spec:
+  type: ClusterIP
+  selector: { app: vllm }
+  ports:
+    - { name: http, port: 8000, targetPort: 8000 }

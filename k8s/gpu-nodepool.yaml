@@ -1,0 +1,46 @@
+# GPU NodePool for EKS Auto Mode.
+#
+# Auto Mode ships built-in "general-purpose" and "system" NodePools that launch
+# only C/M/R instances - so a custom NodePool is required for GPUs. It also
+# ships a built-in "default" NodeClass that already has the correct node role,
+# subnet, and security-group selectors wired by Auto Mode. We reference that
+# rather than hand-rolling a NodeClass (its 80Gi ephemeral storage fits the
+# ~15GB weights, and g5/g6 expose fast local NVMe for caching automatically).
+#
+# Auto Mode automatically provides the NVIDIA driver + device plugin on these
+# nodes; pods just request nvidia.com/gpu. Note the Auto Mode API group for
+# NodePool is karpenter.sh/v1 (NOT the upstream karpenter.k8s.aws).
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: gpu
+spec:
+  template:
+    spec:
+      nodeClassRef:
+        group: eks.amazonaws.com
+        kind: NodeClass
+        name: default
+      # Taint so ONLY GPU workloads (with a matching toleration) land on these
+      # expensive nodes. The vLLM pod tolerates this; nothing else does.
+      taints:
+        - key: nvidia.com/gpu
+          effect: NoSchedule
+      requirements:
+        - key: eks.amazonaws.com/instance-family
+          operator: In
+          # g5 = A10G 24GB (primary in ca-central-1). g6 = L4 24GB (fallback).
+          values: ["g5", "g6"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+  disruption:
+    # Scale GPU nodes back to zero when the vLLM pod is gone (cost control).
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 1m
+  limits:
+    # Hard cap: at most one GPU node (single-replica serving; cost guardrail).
+    nvidia.com/gpu: "1"

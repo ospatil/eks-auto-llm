@@ -1,0 +1,31 @@
+# Terraform / OpenTofu
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+# Keep example tfvars, ignore real ones (may hold account-specific values)
+*.auto.tfvars
+terraform.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+
+# Kubeconfig / kube context
+kubeconfig
+kubeconfig-*
+*.kubeconfig
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local env / secrets
+.env
+*.local
+
+# OS
+.DS_Store
+docs/eks-auto-llm-presentation.html

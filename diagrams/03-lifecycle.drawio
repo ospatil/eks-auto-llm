@@ -1,0 +1,82 @@
+<mxfile host="app.diagrams.net" agent="Claude" version="24.0.0">
+  <diagram name="Lifecycle" id="lifecycle">
+    <mxGraphModel dx="1100" dy="700" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="900" pageHeight="430" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="Lifecycle - from empty to chatting, and back to clean" style="text;html=1;align=center;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#4f46e5;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="210" y="8" width="480" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Provision row -->
+        <mxCell id="g1" value="" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#f8fafc;strokeColor=#4f46e5;arcSize=6;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="30" y="60" width="840" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="g1-label" value="Provision &amp; populate (from laptop, has internet)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#4f46e5;" vertex="1" parent="1">
+          <mxGeometry x="44" y="66" width="380" height="18" as="geometry" />
+        </mxCell>
+
+        <mxCell id="m-pre" value="make preflight" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#1e1b4b;arcSize=20;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="95" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="m-up" value="make up" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#1e1b4b;arcSize=20;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="200" y="95" width="100" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="m-stage" value="make stage" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#1e1b4b;arcSize=20;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="340" y="95" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="m-prewarm" value="make prewarm" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#1e1b4b;arcSize=20;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="490" y="95" width="120" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="m-image" value="make image" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#1e1b4b;arcSize=20;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="650" y="95" width="110" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="f1" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#4f46e5;endArrow=open;endFill=0;" edge="1" source="m-pre" target="m-up" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f2" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#4f46e5;endArrow=open;endFill=0;" edge="1" source="m-up" target="m-stage" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f3" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#4f46e5;endArrow=open;endFill=0;" edge="1" source="m-stage" target="m-prewarm" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f4" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#4f46e5;endArrow=open;endFill=0;" edge="1" source="m-prewarm" target="m-image" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- Deploy & verify row -->
+        <mxCell id="g2" value="" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#f0fdf4;strokeColor=#16a34a;arcSize=6;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="30" y="180" width="600" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="g2-label" value="Deploy &amp; verify (through the SSM tunnel)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#16a34a;" vertex="1" parent="1">
+          <mxGeometry x="44" y="186" width="360" height="18" as="geometry" />
+        </mxCell>
+
+        <mxCell id="m-tunnel" value="make tunnel&#xa;(terminal 1)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#d5e8d4;strokeColor=#16a34a;fontColor=#1e1b4b;arcSize=20;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="55" y="212" width="120" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="m-deploy" value="make deploy&#xa;(terminal 2)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#d5e8d4;strokeColor=#16a34a;fontColor=#1e1b4b;arcSize=20;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="250" y="212" width="120" height="48" as="geometry" />
+        </mxCell>
+        <mxCell id="m-verify" value="make verify&#xa;→ localhost:8501" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#d5e8d4;strokeColor=#16a34a;fontColor=#1e1b4b;arcSize=20;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="445" y="212" width="150" height="48" as="geometry" />
+        </mxCell>
+
+        <mxCell id="f5" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#16a34a;endArrow=open;endFill=0;" edge="1" source="m-tunnel" target="m-deploy" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="f6" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#16a34a;endArrow=open;endFill=0;" edge="1" source="m-deploy" target="m-verify" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- connector from row1 to row2 -->
+        <mxCell id="f-bridge" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#64748b;endArrow=open;endFill=0;dashed=1;" edge="1" source="m-image" target="m-tunnel" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="705" y="160" /><mxPoint x="115" y="160" /></Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Teardown -->
+        <mxCell id="m-down" value="make down&#xa;(cluster cleanup → destroy)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#fee2e2;strokeColor=#dc2626;fontColor=#7f1d1d;arcSize=20;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="680" y="210" width="180" height="52" as="geometry" />
+        </mxCell>
+        <mxCell id="f-down" value="when done" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#dc2626;endArrow=open;endFill=0;fontSize=10;fontColor=#dc2626;labelBackgroundColor=#ffffff;" edge="1" source="m-verify" target="m-down" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="note" value="GPU NodePool scales to zero after the vLLM pod is removed · no NAT/IGW to orphan on destroy" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontColor=#64748b;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="30" y="300" width="840" height="16" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

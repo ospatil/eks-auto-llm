@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: llm
+---
+# Service account targeted by the EKS Pod Identity association (see terraform/
+# iam_pod_identity.tf). Both the staging Job and the vLLM pod use this SA to
+# access the model-weights S3 bucket. No annotations needed for Pod Identity -
+# the role mapping lives in the EKS control plane, not on the SA.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: model-storage-sa
+  namespace: llm
