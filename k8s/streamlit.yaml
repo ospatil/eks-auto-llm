@@ -16,9 +16,20 @@ spec:
     metadata:
       labels: { app: streamlit }
     spec:
+      # No in-cluster api access needed - this app only talks to the vLLM API over HTTP
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: streamlit
           image: __STREAMLIT_IMAGE__
+          # plain python web app: lock it down. Matches the non-root USER baked into the image (src/streamlit/Dockerfile).
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
           ports:
             - { name: http, containerPort: 8501 }
           env:
@@ -29,6 +40,13 @@ spec:
           resources:
             requests: { cpu: "250m", memory: 256Mi }
             limits: { cpu: "1", memory: 512Mi }
+          # readOnlyRootFilesystem is set, so give the app writable scratch for paths needed at runtime
+          # /tmp (media/upload storage) and the home dir (~/.streamlit). Everything else stays read-only.
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: home
+              mountPath: /home/appuser
           readinessProbe:
             httpGet: { path: /_stcore/health, port: 8501 }
             initialDelaySeconds: 5
@@ -37,6 +55,11 @@ spec:
             httpGet: { path: /_stcore/health, port: 8501 }
             initialDelaySeconds: 10
             periodSeconds: 20
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: home
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

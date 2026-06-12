@@ -29,9 +29,18 @@ spec:
         - key: nvidia.com/gpu
           operator: Exists
           effect: NoSchedule
+      securityContext:
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: vllm
           image: __VLLM_IMAGE__
+          # Block privilege escalation and drop all linux capabilities.
+          # We DO NOT set runAsNonRoot/readOnlyRootFileSystem here - the AWS vLLM DLC image writes caches and compiles
+          # kernels at runtime and the GPU/CUDA path expects its default (root) user, so locking those risks breaking startup.
+          # GPU access is via device plugin, not Linux capabilities.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
           # NOTE: do NOT set HF_HUB_OFFLINE/TRANSFORMERS_OFFLINE here. In vLLM
           # 0.22.0, HF_HUB_OFFLINE forces the raw model string through
           # snapshot_download() in AsyncEngineArgs.__post_init__, which rejects
