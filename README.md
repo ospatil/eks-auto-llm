@@ -1,253 +1,154 @@
 # EKS Auto Mode + vLLM - private LLM serving
 
-Deploy an ~8B LLM on Amazon **EKS Auto Mode**, configured following best practices:
+This repo runs an open ~8B model (Qwen2.5-7B-Instruct) on one GPU in Amazon EKS Auto Mode, inside a cluster that cannot reach the internet. vLLM serves an OpenAI-compatible API, and a small Streamlit chat app lets you check that it works.
 
-- Fully private API endpoint
-- Air-gapped data plane (no NAT/IGW)
-- EKS Pod Identity for least-privilege S3 access
-- Weights streamed from S3 by vLLM (OpenAI-compatible API)
-- A small Streamlit app to verify the deployment
+It is a reference implementation, not a production deployment. There is one replica on one GPU, no high availability or disaster recovery, and the serving container runs as root. It is meant to be read, run and adapted. The whole stack comes up from an empty AWS account and goes away with one command, so you only pay while you are using it.
 
-The stack stands up from a clean account and tears down completely with one command, so it is cheap to run on demand. See [`DESIGN.md`](./DESIGN.md) for the architecture and the reasoning behind each decision.
-
-> **New to model hosting?** If you know Kubernetes/EKS but terms like *model weights*, *safetensors*, *CUDA*, *inference server*, or *KV cache* are fuzzy, start with the [Model Hosting Primer](./docs/model-hosting-primer.md) - a brief, infra-oriented tour of the concepts this project uses.
+> **New to model hosting?** If you know Kubernetes but terms like *weights*, *safetensors*, *CUDA* or *KV cache* are fuzzy, read the [Model Hosting Primer](./docs/model-hosting-primer.md) first. [`DESIGN.md`](./DESIGN.md) explains why each choice was made.
 
 ![Architecture](docs/diagrams/01-architecture.png)
 
-## Components
+## The three problems
 
-- **EKS Auto Mode.** AWS manages Karpenter, NVIDIA GPU drivers + device plugin, EBS, load balancing, CoreDNS, and the Pod Identity Agent. None are installed by hand.
-- **Air-gapped data plane.** No NAT, no Internet Gateway. The cluster reaches AWS only through VPC endpoints. The vLLM image comes via an ECR pull-through cache (no-auth ECR Public upstream, fetched server-side by ECR); model weights come from S3. Nothing in the cluster reaches the public internet.
-- **Private API endpoint.** No public Kubernetes API. Access goes through a minimal SSM tunnel target: a small EC2 instance that only forwards TCP, with nothing installed and no cluster rights. kubectl runs on your laptop through the tunnel.
-- **GPU NodePool.** Single A10G (`g5.xlarge`, falls back to `g6`), tainted so only the LLM schedules on it, scales to zero when idle. GPU vs AWS Neuron is the main accelerator decision; see [DESIGN.md](./DESIGN.md#accelerator-choice-nvidia-gpu-vs-aws-neuron) for why this uses GPU.
-- **vLLM** streams weights from S3 into GPU memory (Run:ai streamer) over the S3 gateway endpoint: no init container, no local copy.
-- **EKS Pod Identity** gives the serving pod read-only access to the one weights bucket.
-- **Out-of-band weight staging.** Weights are downloaded from HuggingFace once, from your laptop, and pushed to S3. The cluster never contacts HuggingFace.
+The cluster has no NAT gateway and no internet gateway. It reaches AWS only through VPC endpoints, and its Kubernetes API has no public endpoint. That is the point of the project, and it creates three problems. Everything in this repo answers one of them.
 
-## Prerequisites
+**Getting the model in.** The weights are about 15 GB, and the cluster cannot download them from Hugging Face. So you download them once on your laptop and copy them to S3 (`make stage`). When the pod starts, vLLM's Run:ai streamer reads them from S3 straight into GPU memory over the S3 gateway endpoint. Nothing is copied to disk and the bytes never leave AWS. The pod gets read-only access to that one bucket through EKS Pod Identity, so no keys are involved.
 
-| Tool | Notes |
-|---|---|
-| OpenTofu **or** Terraform | `brew install opentofu` (or use existing `terraform`). Makefile auto-detects. |
-| AWS CLI | authenticated to the **target account** (`aws sso login` / your method) |
-| `session-manager-plugin` | for the SSM tunnel |
-| `kubectl` | runs on your laptop, through the tunnel |
-| `docker` | to build the Streamlit image |
-| GPU quota | "Running On-Demand G and VT instances" ≥ 4 vCPUs in `ca-central-1` |
+**Getting the image in.** The nodes cannot pull from Docker Hub. Instead, ECR has a pull-through cache pointed at ECR Public, where AWS publishes a vLLM image that needs no login. When the cache misses, ECR fetches the image itself from AWS's side, so the nodes still never touch the internet. `make prewarm` does that first pull from your laptop, which means the nodes only ever read from the cache.
 
-> GPU quota is the most common blocker. Fresh accounts often have it at 0. `make preflight` checks it and prints the increase request; approval can take ~24h.
+**Getting yourself in.** With a private API, `kubectl` on your laptop has nothing to connect to. A tiny EC2 instance in the VPC acts as an SSM relay. It has nothing installed and no cluster permissions; it only forwards TCP. `make tunnel` forwards `localhost:8443` to the API through it, and you authenticate as your own AWS identity.
 
-## Quick start
+Auto Mode takes care of the rest. It manages Karpenter, the NVIDIA driver and device plugin, the Pod Identity agent and CoreDNS, so none of them are installed by hand. The GPU NodePool allows a single A10G (`g5.xlarge`, falling back to `g6`), is tainted so only the model lands on it, and scales to zero when nothing needs it. [`DESIGN.md`](./DESIGN.md#accelerator-choice-nvidia-gpu-vs-aws-neuron) explains why this uses an NVIDIA GPU rather than AWS Neuron.
 
-Full lifecycle, from empty account to a working chat and back to a clean account:
+![Data flow](docs/diagrams/02-data-flow.png)
+
+## Before you start
+
+You need:
+
+- OpenTofu (`brew install opentofu`) or Terraform. The Makefile uses whichever it finds.
+- The AWS CLI, logged in to the account you want to use.
+- `session-manager-plugin`, for the tunnel.
+- `kubectl` and `docker`.
+- GPU quota in `ca-central-1`: at least 4 vCPUs of "Running On-Demand G and VT instances".
+
+The quota is the usual blocker. New accounts often start at 0, and an increase can take about a day. `make preflight` checks it and prints the request command if it is too low.
+
+## Run it
 
 ![Lifecycle](docs/diagrams/03-lifecycle.png)
 
 ```bash
-make preflight          # creds, tooling, GPU quota
-make up                 # provision infra (~15-20 min: VPC, EKS, endpoints, tunnel)
-make stage              # download weights -> S3 (out-of-band; ~15GB, one-time)
-make prewarm            # warm the ECR pull-through cache with the vLLM image
-make image              # build + push the Streamlit image to ECR
+make preflight          # credentials, tools, GPU quota
+make up                 # VPC, EKS, endpoints, tunnel instance (~15-20 min)
+make stage              # download the weights and copy them to S3 (one time, ~15 GB)
+make prewarm            # pull the vLLM image into the ECR cache
+make image              # build and push the Streamlit image
 
-# In terminal 1 - keep this running:
+# Terminal 1 - leave this running
 make tunnel
 
-# In terminal 2:
+# Terminal 2
 export KUBECONFIG=$PWD/kubeconfig
-make deploy             # apply GPU NodePool + vLLM + Streamlit
-kubectl -n llm get pods -w   # wait for vllm to become Ready (GPU node ~2min + weight stream)
+make deploy             # GPU NodePool, vLLM, Streamlit
+kubectl -n llm get pods -w   # vLLM is Ready after the GPU node starts (~2 min) and the weights stream in
 
-make verify             # open http://localhost:8501 and chat
+make verify             # then open http://localhost:8501 and chat
 ```
 
-Pause to save cost without tearing down (GPU node terminates, cluster stays; needs the tunnel up + `KUBECONFIG` set):
+To pause without tearing down, run `make scale-down`. vLLM and Streamlit go to zero replicas and the GPU node terminates a few minutes later. `make scale-up` brings them back on a fresh node in 2-4 minutes. Nothing needs re-staging, because the weights stay in S3 and the image stays in the cache. Both commands need the tunnel up and `KUBECONFIG` set.
+
+When you are done, `make down` removes everything.
+
+## What it costs
+
+The GPU is almost the whole bill:
+
+- **Running:** about \$1.25-1.50 an hour. The `g5.xlarge` is about \$1.00; the rest is the EKS control plane (\$0.10), the Auto Mode surcharge, about eight interface endpoints (\$0.01 each) and the `t3.small` tunnel instance.
+- **Scaled to zero:** about \$0.15-0.20 an hour, for the control plane, endpoints and tunnel.
+- **Torn down:** nothing.
+
+Prices vary by region. There is no NAT gateway, which is a cost saving as well as a security one.
+
+## Switching the model
+
+The default, Qwen2.5-7B-Instruct, is Apache-2.0 licensed and needs no Hugging Face token. It fits on the A10G's 24 GB at 16-bit precision.
+
+A gated model such as Llama-3.1-8B-Instruct needs a token. Accept the license on its Hugging Face page, create a token, and stage it:
 
 ```bash
-make scale-down         # vLLM + Streamlit -> 0 replicas; GPU node terminates a few min later
-make scale-up           # back to 1; a fresh GPU node is provisioned (~2-4 min cold start)
+MODEL_ID=meta-llama/Llama-3.1-8B-Instruct HF_TOKEN=hf_xxx make stage
 ```
 
-`scale-up` needs no re-staging: weights stay in S3 and the image stays in the ECR cache. This drops cost from `~$1.25-1.50/hr` to `~$0.15-0.20/hr` (see [Cost](#cost-)). Use it for short pauses; use `make down` to remove everything.
+Then set the same model in `terraform/terraform.tfvars` so the deploy points vLLM at the right S3 path, and run `make up` and `make deploy`:
 
-When finished:
-
-```bash
-make down               # cluster cleanup, then tofu destroy
+```hcl
+model_id = "meta-llama/Llama-3.1-8B-Instruct"
 ```
 
-## How model weights and the image flow
+Both models fit with `--max-model-len 8192 --gpu-memory-utilization 0.90`, set in `k8s/vllm-deployment.yaml`. If vLLM refuses to start with a KV cache error, lower `--max-model-len`. Don't lower `--gpu-memory-utilization`: that shrinks the cache further. The primer's [memory math](./docs/model-hosting-primer.md#doing-the-memory-math-for-this-project) shows why Llama leaves much less room than Qwen.
 
-The cluster has no internet egress, so both the model weights and the container image are staged **out-of-band** from your laptop, then served entirely from within AWS at runtime.
+Only safetensors weights work, because that is the only format the S3 streamer reads. `stage-model.sh` skips `*.pth` and `*.gguf` files.
 
-![Data flow](docs/diagrams/02-data-flow.png)
+## How the tunnel works
 
-### Model weights
+The API's hostname only resolves inside the VPC, so `make tunnel` does three things:
 
-vLLM needs the model files (config, tokenizer, `*.safetensors` weight shards - ~15GB for an 8B model). This project stages them out-of-band and streams them from S3:
+1. Looks up the cluster's real API hostname.
+2. Starts an SSM port-forwarding session through the tunnel instance, from `localhost:8443` to that hostname on port 443.
+3. Writes `./kubeconfig` pointing at `https://localhost:8443`, with `tls-server-name` set to the real hostname. The API's certificate doesn't cover `localhost`, so this lets `kubectl` connect locally and still check the certificate against the right name.
 
-1. **Staging** (one-time, `make stage`, on your laptop). `hf download <model>` pulls the repo to a temp dir, then `aws s3 sync` uploads it to the weights bucket. This is the only step that touches HuggingFace, and it runs with your credentials from your machine, not from the cluster.
-2. **Runtime** (in the pod). vLLM is started with `--model s3://<bucket>/<model>/ --load-format runai_streamer`. The Run:ai Model Streamer reads the safetensors **directly from S3 into GPU memory** over the **S3 gateway endpoint** - no NAT, no internet, no local disk copy. S3 auth is automatic via the `model-storage-sa` **Pod Identity** role (read-only on the one bucket).
+For a quick one-off without the instance, AWS CloudShell can launch inside the VPC. It isn't scripted here.
 
-Consequences:
+## Tearing down
 
-- The data plane never touches the public internet.
-- The slow ~15GB download is decoupled from cluster lifecycle.
-- Pod restarts only re-stream from S3 (no re-download).
-- The serving pod holds least-privilege S3 access.
+`make down` is safe to run on its own:
 
-> Safetensors only: the S3 streamer requires safetensors format. The default models ship safetensors. `stage-model.sh` excludes `*.pth`/`*.gguf`.
+1. It deletes the `llm` namespace and the GPU NodePool so Auto Mode releases the GPU node. It also deletes any LoadBalancer or Ingress objects, though this stack only uses ClusterIP Services.
+2. It deletes the ECR cache repository. ECR creates that repository on the first pull, so Terraform doesn't know about it and `destroy` would leave it behind.
+3. It runs `destroy`. The weights bucket and the Streamlit repository are removed even when they still hold data, and Auto Mode cleans up its own instances, network interfaces and security groups.
+4. It prints a command to check for anything left over.
 
-### The vLLM image
+## When things go wrong
 
-With no NAT/IGW, nodes can't pull from Docker Hub, so the image comes through an ECR pull-through cache:
+Both of these happened on the first real deploy. Both configurations passed `terraform validate`, `shellcheck` and YAML checks, and both failed only once the pod ran. If vLLM crashes, start with `kubectl -n llm logs <pod> --previous`.
 
-- A pull-through rule points at ECR Public (`public.ecr.aws`), whose vLLM Deep Learning Container needs no credentials. The cluster pulls a URI like `…dkr.ecr.<region>.amazonaws.com/ecr-public/deep-learning-containers/vllm:<tag>`.
-- On a cache miss, ECR fetches the upstream image server-side from AWS IPs; the node/VPC never touches the internet. Cached pulls come from your private registry over the `ecr.api`/`ecr.dkr` + S3 endpoints.
-- `make prewarm` does the first pull once from your laptop (internet + admin creds). It creates the backing cache repo and populates the image, so cluster nodes need only `PullOnly` and never hit the first-pull edge cases.
+### Don't name the Service `vllm`
 
-> This is the AWS DLC build of vLLM, not the Docker Hub `vllm/vllm-openai` image; ECR Public needs no auth, which is what makes it work for an air-gapped cluster. It serves the same models. DLC tags are long and rotate; the pinned default is in `terraform/variables.tf` (`vllm_image_tag`). Verify a current tag in the [ECR Public Gallery](https://gallery.ecr.aws/deep-learning-containers/vllm) before deploy.
+vLLM crashed at startup with `ValueError: VLLM_PORT 'tcp://10.x.x.x:8000' appears to be a URI`.
 
-## Choosing / switching the model
+Kubernetes adds an environment variable to every pod for each Service in the namespace, named `<SERVICE>_PORT`. A Service called `vllm` produces `VLLM_PORT=tcp://...`. vLLM reads `VLLM_PORT` as its own setting and expects a number. The same trap catches any app whose settings share a prefix with a Service name, like `redis` or `postgres`.
 
-Default is `Qwen/Qwen2.5-7B-Instruct`: open (Apache-2.0), no HuggingFace token needed, fits on a 24GB A10G in bf16.
+The Service is called `llm-api` instead. If you rename it, avoid the `VLLM_` prefix and update `VLLM_BASE_URL` in `k8s/streamlit.yaml`.
 
-To use a **gated** model like **Llama-3.1-8B-Instruct**:
+### Don't set `HF_HUB_OFFLINE`
 
-1. Accept the license on its HuggingFace page and create an HF access token.
-2. Stage with the token and model id:
-   ```bash
-   MODEL_ID=meta-llama/Llama-3.1-8B-Instruct HF_TOKEN=hf_xxx make stage
-   ```
-3. Set the same `model_id` for infra so the deploy templates the right S3 URI:
-   ```hcl
-   # terraform/terraform.tfvars
-   model_id = "meta-llama/Llama-3.1-8B-Instruct"
-   ```
-   then `make up` (updates the Pod Identity/outputs) and `make deploy`.
+vLLM crashed straight away with `HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': 's3://...'`.
 
-Both models fit on one A10G with `--max-model-len 8192 --gpu-memory-utilization 0.90` (set in `k8s/vllm-deployment.yaml`). If you see a KV-cache OOM at startup, lower `--max-model-len` or `--gpu-memory-utilization`.
+It seemed sensible to tell vLLM to stay offline. But in vLLM 0.22.0, that flag sends the model name through a Hugging Face check early in startup. The check expects a name like `Qwen/Qwen2.5-7B-Instruct` and rejects an `s3://` path, before vLLM's S3 loader ever sees it. The flag wasn't needed anyway: the streamer reads everything from S3 and never tries the internet.
 
-## Accessing the private cluster
+So `HF_HUB_OFFLINE` and `TRANSFORMERS_OFFLINE` are left unset, with a comment in `k8s/vllm-deployment.yaml`. A later vLLM version may fix this, so test before adding them back.
 
-The Kubernetes API is private - it only resolves and accepts connections from inside the VPC. `make tunnel`:
+### Things that look wrong but aren't
 
-1. Resolves the cluster's real API hostname.
-2. Opens `aws ssm start-session … AWS-StartPortForwardingSessionToRemoteHost` through the tunnel instance, forwarding `localhost:8443 → <api-host>:443`.
-3. Writes `./kubeconfig` pointing at `https://localhost:8443` with `tls-server-name` set to the real hostname (so the API cert's SAN still verifies - it doesn't cover `localhost`).
+- `Unknown vLLM environment variable detected: VLLM_PORT_8000_TCP_*` warnings come from the same Service variables. vLLM ignores them.
+- During a rollout, a second vLLM pod sits in `Pending`. The NodePool allows one GPU, so the new pod waits until the old one frees the node.
 
-Then `export KUBECONFIG=$PWD/kubeconfig` and use kubectl normally. You authenticate as your own AWS identity (granted cluster-admin at creation), not as the tunnel instance.
+## Check these on the first run
 
-> **Instance-less alternative:** AWS CloudShell can launch *into your VPC* for ad-hoc kubectl without managing an instance - handy for one-offs, but not scripted here.
+- The vLLM image tag (`vllm_image_tag` in `terraform/variables.tf`) changes often. Check it against the [ECR Public Gallery](https://gallery.ecr.aws/deep-learning-containers/vllm) before deploying, and if you jump to a much newer version, confirm it still takes the same `vllm serve` arguments. This is AWS's build of vLLM, not Docker Hub's `vllm/vllm-openai`, but it serves the same models.
+- After the GPU node starts, confirm its label: `kubectl get nodes --show-labels | grep instance-gpu-name` should show `a10g`.
+- Pinned versions: AWS provider `~> 6.42`, `terraform-aws-modules/eks ~> 21.0`, `terraform-aws-modules/vpc ~> 5.13`, Kubernetes 1.33.
 
-## Cost
-
-Rough, region-dependent, while running:
-
-| Component | ~$/hr |
-|---|---|
-| `g5.xlarge` A10G (on-demand) | ~1.00 |
-| EKS control plane | 0.10 |
-| Auto Mode management (per EC2) | small % surcharge |
-| ~8 interface VPC endpoints | ~0.01 each (~0.08) |
-| SSM tunnel instance (`t3.small`) | ~0.02 |
-
-**≈ $1.25-1.50/hr with the GPU running.** No NAT (removed), so idle-but-up cost is just endpoints + tunnel (a few cents/hr).
-
-The GPU node is the bulk of the bill, so there are three cost states:
-
-| State | ~$/hr | What's running |
-|---|---|---|
-| Running | ~1.25-1.50 | GPU node + control plane + tunnel + endpoints |
-| **Scaled to zero** (`make scale-down`) | **~0.15-0.20** | control plane + tunnel + endpoints (no GPU) |
-| Destroyed (`make down`) | ~0 | nothing |
-
-`make scale-down` / `make scale-up` (see [Quick start](#quick-start)) pause the model without tearing down the cluster.
-
-## Teardown safety
-
-`make down`:
-
-1. Deletes any `LoadBalancer`/`Ingress` objects (this stack uses only ClusterIP, so usually none) and the `llm` namespace + GPU NodePool, so Auto Mode releases the GPU node.
-2. Deletes the **auto-created pull-through cache repo** (`ecr-public/…`) - it's created by ECR on first pull, not by Terraform, so `destroy` wouldn't catch it.
-3. Runs `tofu/terraform destroy`. The S3 bucket (`force_destroy`) and Streamlit ECR repo (`force_delete`) are removed even if non-empty. Auto Mode self-cleans its own EC2/ENI/SG/LB via its service-linked role on cluster deletion.
-4. Prints a command to sanity-check for stragglers.
-
-## Repo layout
+## What's where
 
 ```
-terraform/        # OpenTofu/Terraform - infra (VPC, EKS Auto Mode, endpoints, IAM, S3, ECR, tunnel)
-k8s/              # workload manifests - GPU NodePool, namespace/SA, vLLM, Streamlit
-src/streamlit/    # Streamlit chat app source (app.py, Dockerfile, requirements.txt)
-scripts/          # preflight, stage-model, prewarm-image, build-streamlit, tunnel, deploy, verify, destroy
-diagrams/         # hand-drawn .drawio sources  (make diagrams → docs/diagrams/*.png)
-Makefile          # lifecycle targets (see `make help`)
-DESIGN.md         # architecture + decisions
+terraform/      infrastructure: VPC, EKS Auto Mode, endpoints, IAM, S3, ECR, tunnel instance
+k8s/            workloads: GPU NodePool, namespace and service account, vLLM, Streamlit
+src/streamlit/  the chat app
+scripts/        what the make targets run
+diagrams/       draw.io sources; `make diagrams` exports them to docs/diagrams/*.png
+DESIGN.md       why each choice was made
 ```
 
-## Diagrams
-
-The diagrams above are generated from `diagrams/*.drawio` (hand-drawn style) via the draw.io desktop CLI:
-
-```bash
-make diagrams           # exports diagrams/*.drawio → docs/diagrams/*.png
-```
-
-Edit a `.drawio` source in the draw.io desktop app, then re-run `make diagrams` to refresh the SVGs.
-
-## Implementation notes
-
-- Auto Mode auto-installs NVIDIA drivers + device plugin and the Pod Identity Agent; none are installed manually here.
-- NodePool uses the Auto Mode API group `karpenter.sh/v1` and references the built-in `default` NodeClass (`eks.amazonaws.com`).
-- vLLM `s3://` streaming via `--load-format runai_streamer` is AWS's documented pattern.
-- ECR pull-through cache fetches unauthenticated upstreams **server-side from AWS IPs**, so cached pulls need no cluster internet egress; `make prewarm` populates the cache first to avoid any first-pull edge cases and keep node IAM at `PullOnly`.
-- Two-phase apply: infra (AWS provider) applies from anywhere; **workloads apply through the tunnel** because the Kubernetes API isn't reachable from outside the VPC. This split also keeps `destroy` reliable.
-
-### Pinned versions / verify-on-first-run
-
-- AWS provider `~> 6.42`, `terraform-aws-modules/eks ~> 21.0`, `.../vpc ~> 5.13`, Kubernetes `1.33`.
-- **Verify the vLLM DLC tag** (`vllm_image_tag` in `terraform/variables.tf`) against the [ECR Public Gallery](https://gallery.ecr.aws/deep-learning-containers/vllm) - these tags rotate. Also confirm the DLC entrypoint takes the same `vllm serve` args (it does as of writing) if you bump to a very different version.
-- Confirm the A10G label value after first node launch: `kubectl get nodes --show-labels | grep instance-gpu-name` (expected `a10g` on g5).
-
-## Troubleshooting
-
-Both of these surfaced during the first deployment:
-
-- Both passed `terraform validate`, `shellcheck`, and YAML parsing.
-- Both failed only at pod runtime; static checks don't catch runtime config interactions.
-- Inspect a crash with `kubectl -n llm logs <pod> --previous`.
-
-### Don't name the Service `vllm` (or anything matching an env var the container reads)
-
-**Symptom:** vLLM crashes at engine-core init with `ValueError: VLLM_PORT 'tcp://10.x.x.x:8000' appears to be a URI`.
-
-**Cause:** Kubernetes injects legacy Docker-link env vars for every Service, named `{SERVICENAME}_PORT=tcp://<ip>:<port>` in uppercase. A Service named `vllm` produces `VLLM_PORT`, which vLLM also reads as its **own** config (an integer port) - so it chokes on the `tcp://` URI. This is a classic Kubernetes trap, not vLLM-specific: it bites any app whose config env-var prefix matches a Service name (`redis`, `postgres`, etc.).
-
-**Fix (applied here):** the vLLM Service is named **`llm-api`**, not `vllm`. If you rename it, keep it clear of the `VLLM_` prefix and update `VLLM_BASE_URL` in `k8s/streamlit.yaml`.
-
-### Don't set `HF_HUB_OFFLINE` when loading from `s3://`
-
-**Symptom:** vLLM crashes immediately at arg parsing with `HFValidationError: Repo id must be in the form 'repo_name' or 'namespace/repo_name': 's3://...'`.
-
-**Background.** The `--model` string can be one of three things, and vLLM resolves each differently:
-
-- a HuggingFace repo id (`Qwen/Qwen2.5-7B-Instruct`),
-- a local path (`/models/qwen`),
-- an object-storage URI (`s3://bucket/qwen/`) - what this project uses.
-
-`snapshot_download()` is a HuggingFace Hub function that assumes its input is a repo id; the first thing it does is validate the `name` / `namespace/name` format. An `s3://` string fails that check.
-
-**Cause (vLLM 0.22.0, version-specific).** The crash is an ordering problem in startup:
-
-- With `HF_HUB_OFFLINE=1`, `AsyncEngineArgs.__post_init__` takes an offline branch that calls `get_model_path(self.model)` -> `snapshot_download(repo_id=self.model)`. That branch has no `s3://` guard - it assumes the model string is a HF repo id, so it rejects the URI and crashes.
-- This runs early, at engine-arg init. vLLM's actual S3 handler, `maybe_pull_model_tokenizer_for_runai()` (detects `s3://`, pulls via the Run:ai streamer, rewrites `self.model` to a local path), runs *later* in startup. The offline branch fails before the S3 handler ever sees the string.
-- The flag bought nothing: the Run:ai streamer fetches model + tokenizer from S3 itself and needs no internet to stay offline. So `HF_HUB_OFFLINE` was both unnecessary and the thing breaking startup.
-
-**Fix (applied here):** do **not** set `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE` on the vLLM pod (see the comment in `k8s/vllm-deployment.yaml`). Startup then skips the offline branch, reaches the S3 handler, and loads normally - still with zero internet egress, because the streamer never needed the flag.
-
-**Caveats.** This is specific to vLLM 0.22.0; a later version may add an `s3://` guard to that branch and make the flag harmless, so re-test before adding it back. The function/line names are from inspecting the 0.22.0 source during debugging; the behavior (crash before the S3 handler, fixed by removing the flag) was verified on a live deploy.
-
-### Harmless things you may notice
-
-- `Unknown vLLM environment variable detected: VLLM_PORT_8000_TCP_*` warnings: the same Kubernetes service-discovery env vars; vLLM ignores them. Not an error.
-- A second vLLM pod stuck `Pending` during a rollout: expected - the GPU NodePool caps at one GPU, so a 2nd replica can't schedule until the old one frees the node. Resolves itself.
+Infrastructure and workloads are applied separately on purpose. Terraform only talks to AWS, so it runs from anywhere. The Kubernetes manifests have to go through the tunnel, because the API isn't reachable from outside the VPC. Keeping them apart also keeps `destroy` reliable.

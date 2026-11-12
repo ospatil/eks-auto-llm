@@ -32,155 +32,107 @@ style: |
 
 # Serving an LLM on EKS Auto Mode
 
-## A best-practices, air-gapped vLLM deployment
+## A private model, in a cluster that can't reach the internet
 
 Omkar Patil
 
 ---
 
-## The Goal
+## What we wanted
 
-- Deploy an ~8B LLM on Amazon EKS, following best practices, and keep it operable and cheap.
-- Use EKS Auto Mode so AWS manages the undifferentiated heavy lifting (nodes, drivers, add-ons).
-- Treat security as the default, not an afterthought:
-  - Private API endpoint (no public Kubernetes API)
-  - Air-gapped data plane (no NAT, no Internet Gateway)
-  - Least-privilege access via EKS Pod Identity
-- Stand up from a clean account and tear down completely with one command.
+Run a useful open model on EKS the way you would for sensitive data, and keep it cheap enough to throw away after each session.
 
-### Not the goal
+- **Private:** no public Kubernetes API, no internet from the cluster, the smallest IAM permissions that work.
+- **Cheap:** one GPU, one replica, scale to zero, and one command to remove everything.
+- **Small:** EKS Auto Mode runs the nodes, GPU drivers and add-ons, so we only write what's specific to the model.
 
-- A bespoke inference stack. We configure vLLM; we don't write serving code.
-- A 24/7 production service. This runs on demand and scales to zero between sessions.
+What it is not: a production service, or custom serving code. vLLM does the serving; we configure it.
 
 ---
 
-## What Gets Deployed
+## What runs
 
-- **Model:** Qwen2.5-7B-Instruct (open, Apache-2.0, no HF token). Swappable.
-- **Inference server:** vLLM, exposing an OpenAI-compatible API.
-- **Accelerator:** one NVIDIA A10G GPU (`g5.xlarge`, falls back to `g6`).
-- **Verifier:** a small Streamlit chat app, in-cluster.
-- **Weights:** staged once to S3, streamed into GPU memory at runtime.
+- **Qwen2.5-7B-Instruct.** Open license, no Hugging Face token, swappable for Llama.
+- **vLLM,** serving an OpenAI-compatible API.
+- **One NVIDIA A10G** (24 GB) on a `g5` instance, with `g6` as a fallback.
+- **A small Streamlit chat app,** to prove it works end to end.
 
-The model is a directory of files (weights + config + tokenizer), not code. vLLM loads it; everything around it is ordinary Deployments, Services, and IAM.
+A model is just a directory of files: weights, config and tokenizer. vLLM loads them into GPU memory. Everything around it is ordinary Deployments, Services and IAM.
 
 ---
 
 ## Architecture
 
-![Architecture](diagrams/01-architecture.svg)
+![Architecture h:540](diagrams/01-architecture.png)
 
 ---
 
-## Design Decisions
+## The catch: no internet
 
-| Area | Choice |
-|------|--------|
-| Cluster | EKS Auto Mode (managed Karpenter, drivers, add-ons) |
-| API endpoint | Fully private; reached via a minimal SSM tunnel target |
-| IaC | OpenTofu/Terraform for infra; kubectl manifests for workloads |
-| Accelerator | NVIDIA A10G GPU (not Neuron; see trade-off slide) |
-| Weights | Staged to S3, streamed via vLLM `runai_streamer` |
-| Image | ECR pull-through cache from ECR Public (no Docker Hub) |
-| Access | Pod Identity, read-only S3, scoped to one bucket |
+The VPC has no NAT gateway and no internet gateway. The cluster reaches AWS only through VPC endpoints.
+
+That creates three problems, and every piece of this design answers one:
+
+1. **Getting the model in.** 15 GB of weights, and no route to Hugging Face.
+2. **Getting the image in.** No route to Docker Hub either.
+3. **Getting yourself in.** The Kubernetes API is private, so `kubectl` on a laptop has nothing to reach.
 
 ---
 
-## Two Layers, Two Apply Phases
+## Problem 1: getting the model in
 
-- **Infra layer** (OpenTofu, AWS provider only): VPC, EKS, endpoints, IAM, S3, ECR, tunnel.
-  - Applies from anywhere; only talks to AWS APIs.
-- **Workload layer** (kubectl manifests): GPU NodePool, vLLM, Streamlit.
-  - Applies from the laptop *through the SSM tunnel*.
-
-Why split: a private cluster's Kubernetes API isn't reachable from outside the VPC, so the k8s/helm providers can't run from your laptop. Keeping them out of the infra state also makes `destroy` reliable.
+![Data flow h:540](diagrams/02-data-flow.png)
 
 ---
 
-# Best-Practice Building Blocks
+## Download once, stream from S3
+
+- **Once, on your laptop:** `make stage` downloads the weights and copies them to an S3 bucket. This is the only step that talks to Hugging Face.
+- **Every pod start:** vLLM runs with `--model s3://<bucket>/<model>/ --load-format runai_streamer`. The Run:ai streamer reads the files from S3 over many connections, straight into GPU memory.
+- **No keys:** the pod's service account gets a read-only role for that one bucket through Pod Identity.
+
+So the bytes never leave AWS, nothing is copied to disk, and a restart streams again instead of downloading again. Recreating the whole cluster doesn't download the model either.
 
 ---
 
-## Air-Gapped Data Plane
+## Problem 2: getting the image in
 
-- No NAT gateway, no Internet Gateway. The cluster has zero internet egress.
-- All AWS access goes through VPC endpoints:
-  - Interface: `ssm`, `ssmmessages`, `ec2messages`, `sts`, `ecr.api`, `ecr.dkr`, `eks-auth`, `eks`
-  - Gateway: `s3` (model streaming + ECR layers)
-- Consequence: weights and the container image must be staged out-of-band; nothing in the cluster reaches the public internet.
+- AWS publishes its own vLLM image on **ECR Public**, which needs no login.
+- An **ECR pull-through cache** points at it. On a miss, ECR fetches the image from its own side, not through our VPC.
+- `make prewarm` does that first pull from a laptop, so the nodes only ever read from the cache and keep a pull-only role.
 
-This is the posture you'd want for sensitive workloads, and it forces a clean separation between "what the operator does" and "what the cluster does."
+The image gets the same guarantee as the weights: the cluster never touches the internet to get it.
 
 ---
 
-## Private API Access (SSM Tunnel)
+## Problem 3: getting yourself in
 
-- The Kubernetes API is private: it resolves and accepts connections only inside the VPC.
-- A minimal SSM tunnel target (small EC2, no key, no public IP, nothing installed, no cluster rights) acts purely as a TCP forwarder.
+SSM can forward a port, but only through an instance running its agent. So there is one tiny EC2 instance with no SSH key, no public IP, nothing installed and no cluster permissions. It is a relay, not a bastion.
 
 ```bash
-make tunnel   # SSM port-forward localhost:8443 -> <api-host>:443
+make tunnel                       # localhost:8443 -> private API :443
 export KUBECONFIG=$PWD/kubeconfig
-kubectl get nodes
+kubectl get nodes                 # runs on your laptop, as your own AWS identity
 ```
 
-- kubectl runs on your laptop, authenticating as your own AWS identity.
-- The API cert isn't valid for `localhost`, so the script sets `tls-server-name` to the real hostname: kubectl dials the tunnel but verifies the cert against the name it's actually issued for.
-- SSM can only relay through a running agent on an instance (no agentless VPC tunnel), so this one tiny instance is the minimum needed to reach a private API.
+The API's certificate is issued for its real hostname, not `localhost`. The tunnel script sets `tls-server-name`, so `kubectl` connects locally but checks the certificate against the right name.
 
 ---
 
-## Model Loading: S3 Streaming
+## Two layers, applied separately
 
-![Data flow](diagrams/02-data-flow.svg)
+- **Terraform** only talks to AWS: VPC, endpoints, EKS, IAM, S3, ECR, the tunnel instance. It runs from anywhere.
+- **Kubernetes manifests** (GPU NodePool, vLLM, Streamlit) go through the tunnel, because that's the only way to reach the API.
 
----
-
-## Model Loading: How and Why
-
-- **Stage once** (`make stage`, on your laptop): `hf download` then `aws s3 sync` to the weights bucket. The only step that touches HuggingFace.
-- **At runtime:** vLLM is started with `--model s3://<bucket>/<model>/ --load-format runai_streamer`.
-  - The Run:ai Model Streamer reads safetensors from S3 straight into GPU memory.
-  - Over the S3 gateway endpoint: no NAT, no internet, no local copy.
-  - S3 auth is automatic via the Pod Identity role.
-
-Consequences:
-
-- Data plane never touches the public internet.
-- The slow ~15GB download is decoupled from cluster lifecycle.
-- Pod restarts and scale-ups only re-stream from S3.
-
----
-
-## Image Delivery: ECR Pull-Through Cache
-
-With no internet egress, nodes can't pull from Docker Hub.
-
-- A pull-through rule points at ECR Public (`public.ecr.aws`), whose vLLM DLC needs no credentials.
-- On a cache miss, ECR fetches the upstream image server-side from AWS IPs; the node never touches the internet.
-- `make prewarm` does the first pull once from your laptop, populating the cache.
-- Cluster nodes then need only `PullOnly` and pull over the `ecr.api`/`ecr.dkr` + S3 endpoints.
-
-Result: the same air-gapped guarantee for the image as for the weights.
-
----
-
-## Least-Privilege Access: Pod Identity
-
-- The serving pod runs as the `model-storage-sa` service account.
-- An IAM role trusts `pods.eks.amazonaws.com` and grants only:
-  - `s3:ListBucket` + `s3:GetObject`, read-only, on the one weights bucket.
-- Associated via `aws_eks_pod_identity_association`. No OIDC provider, no SA annotations; the mapping lives in the EKS control plane.
-- The Pod Identity Agent is built into Auto Mode; nothing to install.
+Keeping Kubernetes out of Terraform also keeps `destroy` reliable. Terraform never needs to talk to a cluster it is in the middle of deleting.
 
 ---
 
 <style scoped>pre { font-size: 12px; } section { font-size: 20px; }</style>
 
-## GPU NodePool
+## A NodePool just for the GPU
 
-Auto Mode's built-in NodePools launch only C/M/R instances, so GPUs need a custom one (`karpenter.sh/v1`). It supplies the NVIDIA driver + device plugin; pods just request `nvidia.com/gpu`.
+Auto Mode's built-in pools don't launch GPU instances, so we add one. Auto Mode still supplies the NVIDIA driver and device plugin.
 
 ```yaml
 apiVersion: karpenter.sh/v1
@@ -194,27 +146,26 @@ spec:
         - { key: eks.amazonaws.com/instance-family, operator: In, values: [g5, g6] }
         - { key: karpenter.sh/capacity-type, operator: In, values: [on-demand] }
   disruption: { consolidationPolicy: WhenEmpty, consolidateAfter: 1m }   # scale to zero
-  limits: { nvidia.com/gpu: "1" }                                        # cap at one GPU
+  limits: { nvidia.com/gpu: "1" }                                        # never a second GPU
 ```
 
-- **NodeClass `default`:** built-in, AWS already wired node role / subnets / SGs / 80Gi disk.
-- **Taint** keeps everything but vLLM off the expensive node; **`WhenEmpty`** removes it after the pod is gone.
+- The **taint** keeps everything else off the expensive node.
+- **`WhenEmpty`** removes the node a minute after the model's pod goes away.
+- The **limit** stops a mistake from launching a second GPU.
 
 ---
 
 <style scoped>pre { font-size: 12px; } section { font-size: 20px; }</style>
 
-## vLLM Deployment
-
-Single replica, runs as `model-storage-sa`, tolerates the GPU taint, Service named `llm-api` (not `vllm`, to dodge the `VLLM_PORT` env collision).
+## The vLLM pod
 
 ```yaml
 containers:
   - name: vllm
-    image: <ECR pull-through DLC>
+    image: <ECR pull-through cache>/deep-learning-containers/vllm:<tag>
     args: ["--model=s3://<bucket>/<model>/", "--load-format=runai_streamer",
            "--served-model-name=chat", "--port=8000",
-           "--max-model-len=8192", "--gpu-memory-utilization=0.90"]   # fit 24GB A10G
+           "--max-model-len=8192", "--gpu-memory-utilization=0.90"]
     resources:
       requests: { cpu: "4", memory: 24Gi, nvidia.com/gpu: 1 }
       limits:   { memory: 24Gi, nvidia.com/gpu: 1 }
@@ -222,23 +173,96 @@ containers:
     startupProbe: { httpGet: { path: /health, port: 8000 }, failureThreshold: 60 }
 volumes:
   - name: shm
-    emptyDir: { medium: Memory, sizeLimit: 8Gi }   # PyTorch shared memory
+    emptyDir: { medium: Memory, sizeLimit: 8Gi }
 ```
 
-- **24GB fit:** cap `--max-model-len` + `--gpu-memory-utilization 0.90` to leave KV-cache headroom.
-- **`/dev/shm`:** PyTorch shared memory; per vLLM's k8s docs (matters most for tensor-parallel; harmless at TP=1).
-- **`startupProbe`** (up to ~10 min) covers the S3 stream + graph capture before readiness/liveness.
+- **`chat`** is a stable name for clients, whichever model is behind it.
+- **Context length and memory fraction** are sized for the 24 GB A10G. The next slides show the math.
+- **`/dev/shm`:** PyTorch shares memory between processes, and the container default is tiny.
+- **The startup probe** allows up to 10 minutes for the weights to stream in.
 
 ---
 
-## Accelerator: GPU vs AWS Neuron
+## How an answer is generated
 
-| | NVIDIA GPU (chosen) | AWS Neuron |
-|--|---------------------|------------|
-| Cost | Baseline (~$1/hr g5.xlarge) | ~30-40% cheaper |
-| Get a model running | Point vLLM at safetensors | Needs a pre-compiled artifact |
-| Model availability | Anything on HuggingFace | Only compiled models (short list) |
-| S3 streaming | `runai_streamer` works | Different loader, local-path only |
-| Ecosystem | Large, portable | Smaller, AWS-specific |
+One **forward pass** sends input through all the model's layers (28 for Qwen). An answer takes many passes:
 
-This project uses GPU: it runs any model with no compile step. Neuron trades that flexibility for lower cost, which is worth it for steady-state production serving.
+```text
+prefill  [all prompt tokens] -> layers 1..28 -> token 1   one pass, fills the KV cache
+decode   [token 1]           -> layers 1..28 -> token 2   one pass per token
+decode   [token 2]           -> layers 1..28 -> token 3   ... until the answer ends
+```
+
+- **Prefill is parallel.** The whole prompt is known, so it goes through in one pass.
+- **Decode is one token at a time.** Each step reads all ~15 GB of weights, so memory speed is the limit. Batching several conversations into one step shares that read.
+
+That's why users feel two delays: **time to first token** (queue + prefill) and **time between tokens** (one decode step).
+
+---
+
+## Will it fit? The memory math
+
+Each token's keys and values stay in the **KV cache**, per conversation:
+
+```text
+KV per token  = 2 x layers x KV heads x head size x 2 bytes
+Qwen2.5-7B    = 2 x 28 x 4 x 128 x 2  = 56 KiB  -> 448 MiB per 8,192-token conversation
+```
+
+```text
+A10G usable memory                 ~22.5 GiB
+x 0.90 --gpu-memory-utilization    ~20.2 GiB
+- weights (7.6B x 2 bytes)         ~14.2 GiB
+- working memory and overhead       ~1.5 GiB
+= KV cache                          ~4.5 GiB  ->  ~10 full-length conversations
+```
+
+Llama-3.1-8B needs 1 GiB per conversation, so the same GPU holds about 3. If vLLM refuses to start, lower `--max-model-len`. Lowering the memory fraction makes it worse.
+
+---
+
+## Why GPU and not AWS Neuron
+
+Neuron (Inferentia, Trainium) is roughly 30-40% cheaper, but every model must be **compiled ahead of time** for it.
+
+- **GPU:** hand vLLM the safetensors and it serves them. Any model works, the S3 streamer works, and the skills transfer anywhere.
+- **Neuron:** only compiled models run, and our default model isn't on AWS's list. Its loader can't stream from S3, so we'd need an init container. Staying offline means staging the compiled artifacts too.
+
+Neuron's saving pays off over months of steady production traffic. This cluster lives for an afternoon, so the GPU wins.
+
+---
+
+## Two things that broke
+
+Both passed `terraform validate`, `shellcheck` and YAML checks. Both failed only once the pod ran.
+
+- **A Service named `vllm`.** Kubernetes injects `VLLM_PORT=tcp://10.x.x.x:8000` into every pod. vLLM reads `VLLM_PORT` as its own setting, expects a number, and crashes. The Service is now `llm-api`. Any app whose settings share a prefix with a Service name can hit this.
+- **`HF_HUB_OFFLINE=1`.** It sounds right for an offline cluster. But in vLLM 0.22.0 it pushes the model name through a Hugging Face check that rejects `s3://` before the S3 loader ever runs. The streamer never needed the internet, so the flag is simply left out.
+
+---
+
+## Running it
+
+```bash
+make preflight   # credentials, tools, GPU quota (new accounts often have 0)
+make up          # infrastructure, ~15-20 min
+make stage       # weights to S3, once
+make prewarm     # vLLM image into the ECR cache, once
+make image       # Streamlit image
+make tunnel      # in its own terminal
+make deploy      # NodePool, vLLM, Streamlit
+make verify      # chat at localhost:8501
+```
+
+- **Running:** about $1.25-1.50 an hour, almost all of it the GPU.
+- **`make scale-down`:** about $0.15-0.20 an hour. `scale-up` is back in 2-4 minutes.
+- **`make down`:** removes everything, including the ECR cache repository Terraform doesn't know about.
+
+---
+
+## What we took away
+
+- **An offline cluster is mostly a staging problem.** Decide how the model, the image and the operator get in, and the rest follows.
+- **Auto Mode removes most of the platform work.** What's left is the model-specific part: a GPU NodePool, a Deployment and IAM.
+- **Do the memory math before you deploy.** Weights plus KV cache decide the model, the context length and how many users one GPU can serve.
+- **Static checks don't catch runtime surprises.** Both failures only showed up once the pod ran.

@@ -1,77 +1,80 @@
 <mxfile host="app.diagrams.net" agent="Claude" version="24.0.0">
   <diagram name="Data Flow" id="data-flow">
-    <mxGraphModel dx="1100" dy="700" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="900" pageHeight="500" math="0" shadow="0">
+    <mxGraphModel dx="1100" dy="700" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="920" pageHeight="530" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
         <mxCell id="title" value="Model Weights &amp; Image - Out-of-Band Staging, In-AWS Runtime" style="text;html=1;align=center;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#4f46e5;strokeColor=none;fillColor=none;" vertex="1" parent="1">
-          <mxGeometry x="170" y="8" width="560" height="30" as="geometry" />
+          <mxGeometry x="180" y="8" width="560" height="30" as="geometry" />
         </mxCell>
 
         <!-- Internet sources -->
-        <mxCell id="hf" value="HuggingFace Hub" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#fee2e2;strokeColor=#dc2626;fontColor=#7f1d1d;arcSize=15;fontSize=11;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="40" y="90" width="150" height="50" as="geometry" />
+        <mxCell id="hf" value="Hugging Face Hub" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#fee2e2;strokeColor=#dc2626;fontColor=#7f1d1d;arcSize=15;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="30" y="100" width="150" height="55" as="geometry" />
         </mxCell>
         <mxCell id="ecrpub" value="ECR Public&#xa;(vLLM DLC, no auth)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#fee2e2;strokeColor=#dc2626;fontColor=#7f1d1d;arcSize=15;fontSize=11;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="40" y="330" width="150" height="50" as="geometry" />
+          <mxGeometry x="30" y="420" width="150" height="50" as="geometry" />
         </mxCell>
 
-        <!-- Laptop (out of band actor) -->
-        <mxCell id="laptop" value="Your laptop&#xa;(has internet + admin creds)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#1e1b4b;fontStyle=1;arcSize=15;fontSize=11;" vertex="1" parent="1">
-          <mxGeometry x="310" y="200" width="170" height="60" as="geometry" />
+        <!-- Laptop -->
+        <mxCell id="laptop" value="Your laptop&#xa;(internet + admin creds)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#1e1b4b;fontStyle=1;arcSize=15;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="290" y="100" width="160" height="55" as="geometry" />
         </mxCell>
 
         <!-- AWS account boundary -->
         <mxCell id="aws" value="" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#f8fafc;strokeColor=#4f46e5;strokeWidth=1;arcSize=4;dashed=1;" vertex="1" parent="1">
-          <mxGeometry x="560" y="60" width="310" height="400" as="geometry" />
+          <mxGeometry x="600" y="55" width="290" height="360" as="geometry" />
         </mxCell>
         <mxCell id="aws-label" value="AWS account (your region)" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontStyle=1;fontColor=#4f46e5;" vertex="1" parent="1">
-          <mxGeometry x="578" y="68" width="260" height="20" as="geometry" />
+          <mxGeometry x="618" y="63" width="260" height="20" as="geometry" />
         </mxCell>
-
-        <!-- S3 -->
         <mxCell id="s3" value="S3 bucket&#xa;model weights (safetensors)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#1e1b4b;arcSize=15;fontSize=11;" vertex="1" parent="1">
-          <mxGeometry x="600" y="110" width="230" height="55" as="geometry" />
+          <mxGeometry x="640" y="100" width="230" height="55" as="geometry" />
         </mxCell>
-        <!-- ECR cache -->
-        <mxCell id="ecr" value="ECR pull-through cache&#xa;(backing repo auto-created)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#1e1b4b;arcSize=15;fontSize=11;" vertex="1" parent="1">
-          <mxGeometry x="600" y="330" width="230" height="55" as="geometry" />
-        </mxCell>
-
-        <!-- Cluster -->
         <mxCell id="pod" value="vLLM pod (GPU)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#d5e8d4;strokeColor=#16a34a;fontColor=#1e1b4b;arcSize=15;fontSize=11;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="630" y="225" width="170" height="55" as="geometry" />
+          <mxGeometry x="670" y="215" width="170" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="ecr" value="ECR pull-through cache&#xa;(backing repo auto-created)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#1e1b4b;arcSize=15;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="640" y="330" width="230" height="55" as="geometry" />
         </mxCell>
 
-        <!-- Edges: staging -->
-        <mxCell id="e-hf" value="1 · huggingface-cli download" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#4f46e5;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#4f46e5;labelBackgroundColor=#f8fafc;" edge="1" source="hf" target="laptop" parent="1">
-          <mxGeometry relative="1" as="geometry" />
+        <!-- Staging (blue) -->
+        <mxCell id="e-hf" value="1 · hf download" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#4f46e5;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#4f46e5;labelBackgroundColor=none;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="hf" target="laptop" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
         </mxCell>
-        <mxCell id="e-s3up" value="2 · aws s3 sync (make stage)" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#4f46e5;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#4f46e5;labelBackgroundColor=#f8fafc;" edge="1" source="laptop" target="s3" parent="1">
-          <mxGeometry relative="1" as="geometry" />
+        <mxCell id="e-s3up" value="2 · aws s3 sync&#xa;(make stage)" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#4f46e5;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#4f46e5;labelBackgroundColor=none;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="laptop" target="s3" parent="1">
+          <mxGeometry x="-0.35" relative="1" as="geometry">
+            <mxPoint x="0" y="-18" as="offset" />
+          </mxGeometry>
         </mxCell>
-        <mxCell id="e-prewarm" value="3 · docker pull via cache (make prewarm)" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#4f46e5;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#4f46e5;labelBackgroundColor=#f8fafc;" edge="1" source="laptop" target="ecr" parent="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <!-- ECR fetches upstream server-side -->
-        <mxCell id="e-upstream" value="ECR fetches server-side (AWS IPs)" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#dc2626;strokeWidth=1;endArrow=open;endFill=0;dashed=1;fontSize=10;fontColor=#dc2626;labelBackgroundColor=#ffffff;" edge="1" source="ecrpub" target="ecr" parent="1">
-          <mxGeometry relative="1" as="geometry" />
+        <mxCell id="e-prewarm" value="3 · docker pull via cache&#xa;(make prewarm)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;sketch=1;curveFitting=1;jiggle=2;strokeColor=#4f46e5;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#4f46e5;labelBackgroundColor=none;exitX=0.5;exitY=1;entryX=0;entryY=0.5;" edge="1" source="laptop" target="ecr" parent="1">
+          <mxGeometry x="0.4" relative="1" as="geometry">
+            <Array as="points"><mxPoint x="370" y="357" /></Array>
+            <mxPoint x="0" y="-18" as="offset" />
+          </mxGeometry>
         </mxCell>
 
-        <!-- Runtime edges -->
-        <mxCell id="e-stream" value="stream weights" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#16a34a;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#16a34a;labelBackgroundColor=#d5e8d4;" edge="1" source="s3" target="pod" parent="1">
+        <!-- ECR fetches upstream server-side (red) -->
+        <mxCell id="e-upstream" value="ECR fetches it server-side (AWS IPs)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;sketch=1;curveFitting=1;jiggle=2;strokeColor=#dc2626;strokeWidth=1;endArrow=open;endFill=0;dashed=1;fontSize=10;fontColor=#dc2626;labelBackgroundColor=none;exitX=1;exitY=0.5;entryX=0.5;entryY=1;" edge="1" source="ecrpub" target="ecr" parent="1">
+          <mxGeometry x="-0.4" relative="1" as="geometry">
+            <Array as="points"><mxPoint x="755" y="445" /></Array>
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Runtime (green) -->
+        <mxCell id="e-stream" value="stream weights" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#16a34a;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#16a34a;labelBackgroundColor=#f8fafc;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" source="s3" target="pod" parent="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="e-pull" value="pull image (cached)" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#16a34a;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#16a34a;labelBackgroundColor=#d5e8d4;" edge="1" source="ecr" target="pod" parent="1">
+        <mxCell id="e-pull" value="pull image (cached)" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#16a34a;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#16a34a;labelBackgroundColor=#f8fafc;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" edge="1" source="ecr" target="pod" parent="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
         <!-- Legend -->
-        <mxCell id="leg1" value="■ red = public internet (touched ONLY out-of-band or by ECR server-side)" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontColor=#dc2626;fontStyle=2;" vertex="1" parent="1">
-          <mxGeometry x="40" y="430" width="470" height="16" as="geometry" />
-        </mxCell>
-        <mxCell id="leg2" value="■ blue = one-time staging (your laptop)   ■ green = runtime, in-AWS only (no cluster egress)" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontColor=#16a34a;fontStyle=2;" vertex="1" parent="1">
-          <mxGeometry x="40" y="448" width="510" height="16" as="geometry" />
+        <mxCell id="leg" value="Red = public internet, touched only from your laptop or by ECR itself · blue = one-time staging from your laptop · green = runtime, inside AWS (no cluster egress)" style="text;html=1;align=center;verticalAlign=middle;fontSize=9;fontColor=#64748b;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="30" y="490" width="860" height="16" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

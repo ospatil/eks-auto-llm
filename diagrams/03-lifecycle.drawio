@@ -39,7 +39,7 @@
 
         <!-- Deploy & verify row -->
         <mxCell id="g2" value="" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#f0fdf4;strokeColor=#16a34a;arcSize=6;dashed=1;" vertex="1" parent="1">
-          <mxGeometry x="30" y="180" width="600" height="90" as="geometry" />
+          <mxGeometry x="30" y="180" width="575" height="90" as="geometry" />
         </mxCell>
         <mxCell id="g2-label" value="Deploy &amp; verify (through the SSM tunnel)" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#16a34a;" vertex="1" parent="1">
           <mxGeometry x="44" y="186" width="360" height="18" as="geometry" />
@@ -59,18 +59,20 @@
         <mxCell id="f6" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#16a34a;endArrow=open;endFill=0;" edge="1" source="m-deploy" target="m-verify" parent="1"><mxGeometry relative="1" as="geometry" /></mxCell>
 
         <!-- connector from row1 to row2 -->
-        <mxCell id="f-bridge" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#64748b;endArrow=open;endFill=0;dashed=1;" edge="1" source="m-image" target="m-tunnel" parent="1">
+        <mxCell id="f-bridge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;sketch=1;curveFitting=1;jiggle=2;strokeColor=#64748b;endArrow=open;endFill=0;dashed=1;exitX=0.5;exitY=1;entryX=0;entryY=0.5;" edge="1" source="m-image" target="m-tunnel" parent="1">
           <mxGeometry relative="1" as="geometry">
-            <Array as="points"><mxPoint x="705" y="160" /><mxPoint x="115" y="160" /></Array>
+            <Array as="points"><mxPoint x="705" y="165" /><mxPoint x="42" y="165" /><mxPoint x="42" y="236" /></Array>
           </mxGeometry>
         </mxCell>
 
         <!-- Teardown -->
         <mxCell id="m-down" value="make down&#xa;(cluster cleanup → destroy)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#fee2e2;strokeColor=#dc2626;fontColor=#7f1d1d;arcSize=20;fontSize=11;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="680" y="210" width="180" height="52" as="geometry" />
+          <mxGeometry x="700" y="210" width="180" height="52" as="geometry" />
         </mxCell>
-        <mxCell id="f-down" value="when done" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#dc2626;endArrow=open;endFill=0;fontSize=10;fontColor=#dc2626;labelBackgroundColor=#ffffff;" edge="1" source="m-verify" target="m-down" parent="1">
-          <mxGeometry relative="1" as="geometry" />
+        <mxCell id="f-down" value="when done" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#dc2626;endArrow=open;endFill=0;fontSize=10;fontColor=#dc2626;labelBackgroundColor=none;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="m-verify" target="m-down" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-12" as="offset" />
+          </mxGeometry>
         </mxCell>
 
         <mxCell id="note" value="GPU NodePool scales to zero after the vLLM pod is removed · no NAT/IGW to orphan on destroy" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontColor=#64748b;fontStyle=2;" vertex="1" parent="1">

@@ -42,11 +42,11 @@ The "B" is **billions of parameters** (individual weights). It's the single most
 
 This is why the whole project revolves around a single GPU instance and an ~8B model: it's the sweet spot where one affordable accelerator serves a genuinely useful model at full 16-bit quality.
 
-## The accelerator: GPU, CUDA, and "CUDA-standard"
+## The accelerator: GPUs and CUDA
 
 An **accelerator** is the chip that does the massively-parallel math (GPUs were built for graphics; the same parallelism suits ML). 
 
-**CUDA** is NVIDIA's proprietary software platform - the drivers, libraries, and programming API - for running general computation on NVIDIA GPUs. Because NVIDIA got there first and everyone built on it, **CUDA is the de-facto standard**: virtually every ML framework and model targets CUDA first. When I called GPU "CUDA-standard," I meant: hand it a standard model and it runs, because the entire ecosystem assumes CUDA.
+**CUDA** is NVIDIA's proprietary software platform - the drivers, libraries, and programming API - for running general computation on NVIDIA GPUs. Because NVIDIA got there first and everyone built on it, **CUDA is the de-facto standard**: virtually every ML framework and model targets CUDA first. In practice that means you can hand an NVIDIA GPU a standard model and it runs, because the whole ecosystem assumes CUDA.
 
 In EKS terms: the GPU needs a kernel driver + a Kubernetes **device plugin** (so pods can request `nvidia.com/gpu: 1` the way they request CPU/memory). **EKS Auto Mode installs both for us** - that's a big reason we chose it.
 
@@ -70,17 +70,73 @@ In k8s terms: vLLM is just the container in our `Deployment`. The "model" is dat
 
 vLLM exposes the **same HTTP API shape as OpenAI's** (`POST /v1/chat/completions`, `GET /v1/models`, etc.). This is a de-facto standard: any client or library written for OpenAI works against vLLM by changing the base URL. The Streamlit app uses the stock `openai` Python client pointed at `http://llm-api:8000/v1`, with no custom protocol.
 
-### Tokens, context length, and the KV cache
+### Tokens and context length
 
-A few terms you'll see in the vLLM args and error messages:
+- **Token** - a chunk of text, about ¾ of a word. Models read and write tokens, not characters.
+- **Context length** (`--max-model-len`) - the most tokens one conversation can hold, prompt and answer together. Qwen2.5-7B supports 32,768; we cap it at 8,192 to save memory.
 
-- **Token** - a chunk of text (~¾ of a word). Models read and write tokens, not characters.
-- **Context length** (`--max-model-len`) - the max tokens the model can consider at once (prompt + response). Bigger = more memory.
-- **KV cache** - memory vLLM uses to avoid recomputing past tokens during generation. It grows with context length × concurrent requests, and it competes with the weights for GPU memory. This is why `--max-model-len 8192` and `--gpu-memory-utilization 0.90` are tuned in our deployment: if the KV cache + weights exceed 24 GB, vLLM OOMs at startup. Lowering either is the fix.
+### How an answer is generated: prefill and decode
+
+The model is a stack of layers (28 for Qwen2.5-7B). One **forward pass** sends input through every layer in order, each layer's output feeding the next. Generating an answer takes many passes, in two phases:
+
+```text
+Prompt: "Explain a Kubernetes pod in one sentence."   (~10 tokens)
+
+prefill  [all 10 prompt tokens] -> layers 1..28 -> token 1    one pass, fills the KV cache
+decode   [token 1]              -> layers 1..28 -> token 2    one pass per token
+decode   [token 2]              -> layers 1..28 -> token 3
+         ...                                                  until the answer ends
+```
+
+- **Prefill is parallel.** The whole prompt is known up front, so all its tokens go through the layers together in one pass. A longer prompt makes that pass heavier, not more numerous.
+- **Decode is sequential.** Token 3 can't be computed until token 2 exists, so every output token costs a full pass.
+- **Each decode step reads all ~15 GB of weights to produce one token per conversation.** Memory speed, not arithmetic, is usually the limit. Running several conversations in the same step shares that read, which is why vLLM batches requests and why its throughput beats a naive server.
+
+This is why a model request is unlike a normal web request. The answer is produced over many steps, its cost grows with the length of the answer, and the connection stays open while tokens stream back. It also explains the two delays a user notices: **time to first token** (waiting in the queue plus prefill, longer for long prompts) and **time between tokens** (one decode step).
+
+### The KV cache
+
+Inside each layer, every token produces a **key** and a **value**: vectors that later tokens look back at to decide what matters. Without a cache, each decode step would recompute them for every earlier token. The **KV cache** keeps them in GPU memory instead, so prefill fills it with the prompt and each decode step adds one more token's worth.
+
+That memory is the second big consumer after the weights, and it is per conversation. The size per token comes straight from the model's `config.json`:
+
+```text
+KV bytes per token = 2 (key + value) x layers x KV heads x head size x bytes per number
+```
+
+For Qwen2.5-7B (28 layers, 4 KV heads, head size 128, 16-bit):
+
+```text
+2 x 28 x 4 x 128 x 2 bytes = 57,344 bytes = 56 KiB per token
+One full 8,192-token conversation = 8,192 x 56 KiB = 448 MiB
+```
+
+### Doing the memory math for this project
+
+Put the pieces together for the A10G:
+
+```text
+GPU memory the A10G reports           ~22.5 GiB
+x 0.90 (--gpu-memory-utilization)     ~20.2 GiB   vLLM's budget
+- weights (7.6B params x 2 bytes)     ~14.2 GiB
+- working memory and overhead         ~1.5 GiB    rough; depends on vLLM version
+= left for the KV cache               ~4.5 GiB
+/ 448 MiB per full conversation       ~10 conversations at the full 8,192 tokens
+```
+
+Most conversations are much shorter than 8,192 tokens, and vLLM only allocates cache for tokens that exist, so in practice it serves more than ten at once. You don't have to trust the estimate: at startup vLLM logs the KV cache size in tokens and the maximum concurrency for `--max-model-len`-sized requests.
+
+Llama-3.1-8B shows how quickly this changes. It has 32 layers and 8 KV heads, so its cache costs 128 KiB per token: 1 GiB per full conversation. Its weights are also bigger (8B params, ~15 GiB). The same GPU then holds only about three full-length conversations.
+
+**When vLLM refuses to start.** vLLM checks at startup that at least one conversation of `--max-model-len` tokens fits in the cache. If it doesn't, it exits with an error about the KV cache. The fixes, in order:
+
+- **Lower `--max-model-len`.** Halving it halves the cache needed per conversation.
+- **Raise `--gpu-memory-utilization`** a little, if nothing else uses the GPU. Lowering it shrinks the cache budget and makes this error worse.
+- **Use a smaller or quantized model,** or a bigger GPU.
 
 ## How it all fits in this project
 
-![How the pieces fit](diagrams/04-concepts.svg)
+![How the pieces fit](diagrams/04-concepts.png)
 
 - **A "model"** = the safetensors weights + config + tokenizer we stage into **S3**.
 - **The accelerator** = an NVIDIA **GPU** (A10G), with CUDA + device plugin handled by **Auto Mode**.

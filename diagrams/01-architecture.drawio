@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="Claude" version="24.0.0">
   <diagram name="Architecture" id="architecture">
-    <mxGraphModel dx="1100" dy="700" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="900" pageHeight="560" math="0" shadow="0">
+    <mxGraphModel dx="1100" dy="700" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="900" pageHeight="530" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -9,91 +9,103 @@
         </mxCell>
 
         <!-- Laptop -->
-        <mxCell id="laptop" value="Your laptop&#xa;(kubectl / helm / aws cli)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#1e1b4b;fontStyle=1;arcSize=15;" vertex="1" parent="1">
-          <mxGeometry x="30" y="250" width="150" height="60" as="geometry" />
+        <mxCell id="laptop" value="Your laptop&#xa;(kubectl, aws cli)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#1e1b4b;fontStyle=1;arcSize=15;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="130" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- AWS services outside the VPC -->
+        <mxCell id="aws-label" value="AWS services (outside the VPC)" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#64748b;" vertex="1" parent="1">
+          <mxGeometry x="20" y="362" width="170" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="s3" value="S3&#xa;model weights" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#1e1b4b;arcSize=15;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="385" width="140" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ecr" value="ECR pull-through&#xa;cache (vLLM image)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#1e1b4b;arcSize=15;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="20" y="435" width="140" height="40" as="geometry" />
         </mxCell>
 
         <!-- VPC container -->
         <mxCell id="vpc" value="" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#f8fafc;strokeColor=#4f46e5;strokeWidth=1;arcSize=4;dashed=1;" vertex="1" parent="1">
-          <mxGeometry x="240" y="60" width="620" height="470" as="geometry" />
+          <mxGeometry x="260" y="55" width="620" height="440" as="geometry" />
         </mxCell>
         <mxCell id="vpc-label" value="VPC - fully private (no NAT, no Internet Gateway)" style="text;html=1;align=left;verticalAlign=middle;fontSize=12;fontStyle=1;fontColor=#4f46e5;" vertex="1" parent="1">
-          <mxGeometry x="258" y="68" width="420" height="20" as="geometry" />
+          <mxGeometry x="278" y="63" width="420" height="20" as="geometry" />
         </mxCell>
 
         <!-- SSM tunnel target -->
         <mxCell id="ssm" value="SSM tunnel target&#xa;(TCP forward only)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#ffffff;strokeColor=#4f46e5;fontColor=#1e1b4b;arcSize=15;fontSize=11;" vertex="1" parent="1">
-          <mxGeometry x="270" y="250" width="140" height="60" as="geometry" />
+          <mxGeometry x="285" y="130" width="130" height="60" as="geometry" />
         </mxCell>
 
         <!-- EKS cluster container -->
         <mxCell id="eks" value="" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#eef2ff;strokeColor=#4f46e5;arcSize=6;" vertex="1" parent="1">
-          <mxGeometry x="460" y="110" width="380" height="280" as="geometry" />
+          <mxGeometry x="470" y="95" width="390" height="205" as="geometry" />
         </mxCell>
         <mxCell id="eks-label" value="EKS Auto Mode - private API endpoint" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontStyle=1;fontColor=#4f46e5;" vertex="1" parent="1">
-          <mxGeometry x="478" y="118" width="320" height="20" as="geometry" />
+          <mxGeometry x="488" y="103" width="320" height="20" as="geometry" />
         </mxCell>
 
         <!-- GPU node pool -->
         <mxCell id="gpu" value="" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#ffffff;strokeColor=#16a34a;arcSize=8;" vertex="1" parent="1">
-          <mxGeometry x="490" y="150" width="320" height="120" as="geometry" />
+          <mxGeometry x="495" y="135" width="340" height="120" as="geometry" />
         </mxCell>
         <mxCell id="gpu-label" value="GPU NodePool (g5/g6 · A10G · scale-to-zero)" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#16a34a;" vertex="1" parent="1">
-          <mxGeometry x="505" y="156" width="300" height="18" as="geometry" />
+          <mxGeometry x="510" y="141" width="300" height="18" as="geometry" />
         </mxCell>
         <mxCell id="vllm" value="vLLM&#xa;OpenAI API :8000" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#d5e8d4;strokeColor=#16a34a;fontColor=#1e1b4b;arcSize=15;fontSize=11;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="510" y="185" width="130" height="60" as="geometry" />
+          <mxGeometry x="515" y="170" width="125" height="60" as="geometry" />
         </mxCell>
         <mxCell id="streamlit" value="Streamlit&#xa;chat :8501" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#ffffff;strokeColor=#16a34a;fontColor=#1e1b4b;arcSize=15;fontSize=11;" vertex="1" parent="1">
-          <mxGeometry x="665" y="185" width="120" height="60" as="geometry" />
-        </mxCell>
-        <mxCell id="e-st-vllm" value="OpenAI API" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#16a34a;strokeWidth=1;endArrow=open;endFill=0;fontSize=9;fontColor=#16a34a;labelBackgroundColor=#ffffff;" edge="1" source="streamlit" target="vllm" parent="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-
-        <!-- Pod identity note -->
-        <mxCell id="podid" value="Pod Identity → read-only S3" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontColor=#64748b;fontStyle=2;" vertex="1" parent="1">
-          <mxGeometry x="500" y="290" width="200" height="18" as="geometry" />
+          <mxGeometry x="700" y="170" width="115" height="60" as="geometry" />
         </mxCell>
 
         <!-- VPC endpoints strip -->
-        <mxCell id="vpce" value="VPC endpoints: ssm · ssmmessages · ec2messages · sts · ecr.api · ecr.dkr · eks-auth · eks · s3 (gateway)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#fef9c3;strokeColor=#ca8a04;fontColor=#713f12;arcSize=10;fontSize=10;" vertex="1" parent="1">
-          <mxGeometry x="270" y="440" width="560" height="44" as="geometry" />
+        <mxCell id="vpce" value="&lt;b&gt;VPC endpoints&lt;/b&gt;&lt;br&gt;ssm · ssmmessages · ec2messages · sts&lt;br&gt;ecr.api · ecr.dkr · eks-auth · eks · s3 (gateway)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#fef9c3;strokeColor=#ca8a04;fontColor=#713f12;arcSize=10;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="285" y="385" width="575" height="80" as="geometry" />
         </mxCell>
 
-        <!-- External AWS services (out of band) -->
-        <mxCell id="s3" value="S3&#xa;model weights" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#1e1b4b;arcSize=15;fontSize=11;" vertex="1" parent="1">
-          <mxGeometry x="30" y="400" width="130" height="55" as="geometry" />
-        </mxCell>
-        <mxCell id="ecr" value="ECR pull-through&#xa;cache (vLLM image)" style="rounded=1;whiteSpace=wrap;html=1;sketch=1;curveFitting=1;jiggle=2;fillColor=#eef2ff;strokeColor=#4f46e5;fontColor=#1e1b4b;arcSize=15;fontSize=11;" vertex="1" parent="1">
-          <mxGeometry x="30" y="470" width="130" height="55" as="geometry" />
-        </mxCell>
-
-        <!-- Edges -->
-        <!-- laptop to ssm (tunnel) -->
-        <mxCell id="e-tunnel" value="SSM port-forward :443" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#4f46e5;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#4f46e5;labelBackgroundColor=#f8fafc;" edge="1" source="laptop" target="ssm" parent="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <!-- ssm to eks api -->
-        <mxCell id="e-api" value="kubectl" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#4f46e5;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#4f46e5;labelBackgroundColor=#eef2ff;" edge="1" source="ssm" target="eks" parent="1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <!-- s3 to vllm (stream via endpoint) -->
-        <mxCell id="e-s3" value="stream weights (S3 gateway)" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#16a34a;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#16a34a;labelBackgroundColor=#ffffff;dashed=0;" edge="1" source="s3" target="vllm" parent="1">
+        <!-- Edges: access path (blue) -->
+        <mxCell id="e-tunnel" value="SSM port-&#xa;forward :443" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#4f46e5;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#4f46e5;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" source="laptop" target="ssm" parent="1">
           <mxGeometry relative="1" as="geometry">
-            <Array as="points"><mxPoint x="220" y="215" /></Array>
+            <mxPoint x="-12" y="-16" as="offset" />
           </mxGeometry>
         </mxCell>
-        <!-- ecr to gpu node (image pull) -->
-        <mxCell id="e-ecr" value="pull image (ecr.dkr + s3)" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#16a34a;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#16a34a;labelBackgroundColor=#ffffff;" edge="1" source="ecr" target="gpu" parent="1">
+        <mxCell id="e-api" value="kubectl" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#4f46e5;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#4f46e5;labelBackgroundColor=none;exitX=1;exitY=0.5;entryX=0;entryY=0.317;" edge="1" source="ssm" target="eks" parent="1">
           <mxGeometry relative="1" as="geometry">
-            <Array as="points"><mxPoint x="220" y="497" /><mxPoint x="430" y="320" /></Array>
+            <mxPoint x="0" y="-10" as="offset" />
           </mxGeometry>
         </mxCell>
 
-        <!-- Legend / note -->
-        <mxCell id="note" value="Solid green = in-AWS data plane (no internet) · blue = control/access path" style="text;html=1;align=center;verticalAlign=middle;fontSize=9;fontColor=#64748b;fontStyle=2;" vertex="1" parent="1">
-          <mxGeometry x="240" y="534" width="620" height="16" as="geometry" />
+        <!-- Edges: data plane (green) -->
+        <mxCell id="e-s3-in" value="weights" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#16a34a;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#16a34a;labelBackgroundColor=none;exitX=1;exitY=0.5;entryX=0;entryY=0.25;" edge="1" source="s3" target="vpce" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="-20" y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-ecr-in" value="image" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#16a34a;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#16a34a;labelBackgroundColor=none;exitX=1;exitY=0.5;entryX=0;entryY=0.875;" edge="1" source="ecr" target="vpce" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="-20" y="-10" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-weights" value="stream weights&#xa;(Pod Identity, read-only S3)" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#16a34a;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#16a34a;labelBackgroundColor=#f8fafc;exitX=0.508;exitY=0;entryX=0.5;entryY=1;" edge="1" source="vpce" target="vllm" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="40" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-image" value="pull image" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#16a34a;strokeWidth=1;endArrow=open;endFill=0;fontSize=10;fontColor=#16a34a;labelBackgroundColor=#f8fafc;exitX=0.822;exitY=0;entryX=0.772;entryY=1;" edge="1" source="vpce" target="gpu" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="22" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e-st-vllm" value="OpenAI API" style="sketch=1;curveFitting=1;jiggle=2;strokeColor=#16a34a;strokeWidth=1;endArrow=open;endFill=0;fontSize=9;fontColor=#16a34a;labelBackgroundColor=none;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" edge="1" source="streamlit" target="vllm" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="0" y="-9" as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="note" value="Green = data plane, inside AWS (no internet) · blue = your access path" style="text;html=1;align=center;verticalAlign=middle;fontSize=9;fontColor=#64748b;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="260" y="502" width="620" height="16" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
