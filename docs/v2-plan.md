@@ -62,7 +62,7 @@ Prove the three risky assumptions on a throwaway cluster before changing the rea
 
 ## Phase 2: the NVIDIA DRA driver
 
-- [ ] Find where the driver chart's images live. Use a pull-through rule if the registry is supported; otherwise add `scripts/mirror-image.sh` (laptop, `skopeo` or `crane`, digest-preserving) and mirror them. This is TODO Phase 2's script.
+- [ ] Find where the driver chart's images live. Use a pull-through rule if the registry is supported; otherwise add `scripts/mirror-image.sh` (laptop, `skopeo` or `crane`, digest-preserving) and mirror them. Keep the script generic; the gateway images in Phase 5 use it too.
 - [ ] Install the driver with Helm on the GPU node group only, with the `MPSSupport` gate if Phase 0 said go. This is the first Helm install in the repo; add `helm` to preflight.
 - [ ] Switch the vLLM pod from `nvidia.com/gpu: 1` to a DRA claim.
 - **Done when:** the v1 chat model serves through a DRA claim on the node group, and nothing requests `nvidia.com/gpu`.
@@ -94,7 +94,7 @@ Prove the three risky assumptions on a throwaway cluster before changing the rea
 - [ ] Create two `InferencePool`s, `chat` and `embed`, each with an endpoint picker from llm-d. Check which EPP image and version match the CRDs.
 - [ ] Route by the request's `model` field. Decide between llm-d's body-based routing and agentgateway's own model routing, and record why.
 - [ ] Point Streamlit at the gateway instead of the vLLM Service.
-- [ ] Add an API key at the gateway, so direct unauthenticated requests get a 401. This covers part of TODO Phase 5.
+- [ ] Add an API key at the gateway, so direct unauthenticated requests get a 401. Keys come from a Secret created out of band, never committed.
 - [ ] Optional: a NetworkPolicy so only the gateway reaches the vLLM pods. Check that enforcement works on both node types before claiming it.
 - **Done when:** `model=chat` and `model=embed` requests reach the right pool through one gateway, Streamlit works through it, and a request without a key is rejected.
 
@@ -111,16 +111,16 @@ Prove the three risky assumptions on a throwaway cluster before changing the rea
 - [ ] Merge `v2` into `main`, and link the `v1` tag from the README for anyone who wants the simpler version.
 - **Done when:** a fresh clone runs the full v2 flow from the README, and `make down` leaves a clean account.
 
-## How this relates to TODO.md
+## After v2
 
-v2 takes over parts of the TODO phases:
+Ideas worth picking up once v2 works, each on its own branch:
 
-- **Phase 2 (registry):** the mirror script is built here for the DRA driver and gateway images.
-- **Phase 3 (GPU without Auto Mode):** the GPU node group and self-installed driver are built here. The GPU Operator variant is not.
-- **Phase 5 (front door):** gateway API keys are built here; TLS is not.
-- **Phase 7 (embedding endpoint):** built here in full, and its GPU-sharing decision is MPS.
-
-Phases 1 (Helm chart for our own workloads), 4 (observability), 6 (sizing and load tests) and 8 (break-it drills) are untouched and can follow v2.
+- **A Helm chart for our own workloads,** replacing the `sed` templating in `scripts/deploy.sh`.
+- **Observability:** Prometheus and Grafana (or Amazon Managed Prometheus through an endpoint), scraping vLLM, the gateway and GPU metrics, with a dashboard and a short "is it healthy" runbook.
+- **Sizing:** an in-cluster load test that produces latency, time to first token and tokens per second by concurrency, for both models on the shared GPU.
+- **TLS at the gateway,** with a private certificate source and a note on how clients trust it.
+- **Break-it drills:** scripts that inject one fault each (KV cache too small, bad image digest, missing endpoint, `VLLM_PORT` collision, MPS cap exceeded) with a walkthrough for finding and fixing it.
+- **The GPU Operator** instead of the self-installed DRA driver, to see what a full on-prem GPU stack involves.
 
 ## Decisions the owner still has to make
 
