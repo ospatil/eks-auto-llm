@@ -16,6 +16,9 @@ kubeconfig
 kubeconfig-*
 *.kubeconfig
 
+# Model weights from `make weights` (~16 GB)
+/models/
+
 # Python
 __pycache__/
 *.py[cod]

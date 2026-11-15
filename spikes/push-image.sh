@@ -5,7 +5,7 @@
 # than one shard. Prints the digest-pinned reference to use.
 #
 #   spikes/push-image.sh hello spikes/image-volume/hello
-#   spikes/push-image.sh qwen2.5-7b-instruct ~/models/Qwen2.5-7B-Instruct
+#   spikes/push-image.sh qwen2.5-7b-instruct models/Qwen2.5-7B-Instruct
 #   -> <registry>/<project>/spike/<name>@sha256:...
 #
 # Phase 3's scripts/package-model.sh grows out of this. Repos land under

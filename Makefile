@@ -4,7 +4,7 @@
 #   make preflight        # checks creds, tooling, GPU quota
 #   make up               # provision infra (VPC, EKS Auto Mode, S3, ECR, tunnel)
 #   make stage            # download model weights -> S3 (out-of-band, your laptop)
-#   make weights          # download model weights -> ~/models (no AWS; for the spikes)
+#   make weights          # download model weights -> models/ (git-ignored; no AWS; for the spikes)
 #   make prewarm          # warm the ECR pull-through cache with the vLLM image
 #   make image            # build + push the Streamlit image to ECR
 #   make tunnel           # (terminal 1) open SSM tunnel to the private API
@@ -49,7 +49,7 @@ up: ## Provision infrastructure (idempotent)
 stage: ## Download model weights to S3 (out-of-band)
 	@bash scripts/stage-model.sh
 
-weights: ## Download model weights to ~/models for image packaging (no AWS needed)
+weights: ## Download model weights to models/ (git-ignored) for image packaging (no AWS needed)
 	@bash scripts/download-weights.sh
 
 prewarm: ## Warm the ECR pull-through cache with the vLLM image

@@ -5,16 +5,17 @@
 # already has.
 #
 #   make weights
-#   -> ~/models/Qwen2.5-7B-Instruct, ~/models/Qwen2.5-0.5B-Instruct
+#   -> models/Qwen2.5-7B-Instruct, models/Qwen2.5-0.5B-Instruct (git-ignored)
 #
 # Env overrides:
 #   MODELS       space-separated HuggingFace repo ids (default: the two below)
-#   WEIGHTS_DIR  parent directory (default: ~/models); one folder per model
+#   WEIGHTS_DIR  parent directory (default: models/ in the repo); one folder per model
 #   HF_TOKEN     only needed for gated models (e.g. Llama); Qwen needs none
 set -euo pipefail
 
+cd "$(dirname "$0")/.."
 MODELS="${MODELS:-Qwen/Qwen2.5-7B-Instruct Qwen/Qwen2.5-0.5B-Instruct}"
-WEIGHTS_DIR="${WEIGHTS_DIR:-$HOME/models}"
+WEIGHTS_DIR="${WEIGHTS_DIR:-models}"
 
 # Use an installed `hf` if there is one, otherwise an isolated venv as in
 # stage-model.sh.
@@ -43,4 +44,4 @@ done
 
 echo
 echo "Done. Push each folder during the session, for example:"
-echo "  spikes/push-image.sh qwen2.5-7b-instruct ${WEIGHTS_DIR}/Qwen2.5-7B-Instruct"
+echo "  spikes/push-image.sh qwen2.5-7b-instruct ${WEIGHTS_DIR}/Qwen2.5-7B-Instruct   # from the repo root"
