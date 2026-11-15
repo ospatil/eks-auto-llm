@@ -2,6 +2,21 @@
 
 Written 2026-11-12, to be executed later on the `v2` branch. The `v1` tag marks the working v1. Read [README.md](../README.md) and [DESIGN.md](../DESIGN.md) first.
 
+## Status (2026-11-15)
+
+Phase 0 prep and local verification are done; nothing has been applied to AWS yet. Details are in [lab-log.md](./lab-log.md) and the runbook in [spikes/README.md](../spikes/README.md).
+
+- Done in code, behind `enable_gpu_node_group` (off for the real stack): Kubernetes 1.37, the `gpu` node group with Bottlerocket's device plugin off, the add-ons and the `ec2` endpoint. `gpu_ami_type` can switch the node group to AL2023 if the DRA driver can't find Bottlerocket's NVIDIA driver.
+- The spike stack is `SPIKE=1` on any `make` target (own workspace, `terraform/spike.tfvars`, own project name).
+- Verified offline: `make test` (plan tests with mocked AWS) and `spikes/local/verify.sh` on kind (33 checks).
+
+**To resume:**
+
+1. Log in to AWS, then `make preflight` (credentials, buildx, helm, GPU quota).
+2. Optional re-check: `make test`, then `spikes/local/up.sh && spikes/local/verify.sh` (needs Colima running: `colima start`).
+3. With the owner's go-ahead: `make up SPIKE=1` and follow [spikes/README.md](../spikes/README.md) from "Bring it up". Run the GPU parts in one session and scale back with `make gpu-nodes N=0 SPIKE=1`.
+4. Record results in the lab log, then `make down SPIKE=1`.
+
 ## What v2 changes
 
 v1 runs one model on one GPU in an Auto Mode cluster, streams the weights from S3, and has no gateway. v2 keeps the offline cluster and changes four things:
@@ -51,19 +66,19 @@ Prove the three risky assumptions on a throwaway cluster before changing the rea
 
 ## Phase 1: Kubernetes 1.37 and a GPU node group
 
-- [ ] Set `kubernetes_version` to `1.37`. v2 creates fresh clusters only; an in-place upgrade from 1.33 would take four one-version steps and isn't worth it for a disposable lab.
-- [ ] Add a managed node group `gpu`: Bottlerocket NVIDIA variant, `g5.xlarge`, min 0, max 1, desired 0, taint `nvidia.com/gpu:NoSchedule`, a label to select it, and a root/data volume large enough for the vLLM image plus two model images (start at 100 GiB).
-- [ ] Turn off Bottlerocket's bundled NVIDIA device plugin on that group (look up the exact Bottlerocket setting), because the DRA driver and the device plugin must not manage the same GPU.
-- [ ] Add the EKS add-ons and any endpoints Phase 0 showed are needed.
+- [x] Set `kubernetes_version` to `1.37`. v2 creates fresh clusters only; an in-place upgrade from 1.33 would take four one-version steps and isn't worth it for a disposable lab.
+- [x] Add a managed node group `gpu`: Bottlerocket NVIDIA variant, `g5.xlarge`, min 0, max 1, desired 0, taint `nvidia.com/gpu:NoSchedule`, a label to select it, and a root/data volume large enough for the vLLM image plus two model images (start at 100 GiB).
+- [x] Turn off Bottlerocket's bundled NVIDIA device plugin on that group (look up the exact Bottlerocket setting), because the DRA driver and the device plugin must not manage the same GPU. (`settings.kubelet-device-plugins.nvidia.enabled = false`, Bottlerocket 1.63.0+.)
+- [ ] Add the EKS add-ons and any endpoints Phase 0 showed are needed. (`vpc-cni`, `kube-proxy`, `eks-pod-identity-agent` and `ec2` are in, behind the flag; Phase 0 confirms or adds to them.)
 - [ ] Remove the Auto Mode GPU NodePool. Auto Mode keeps running everything else.
-- [ ] Change `make scale-up` and `make scale-down` to set the node group's desired size to 1 or 0.
+- [ ] Change `make scale-up` and `make scale-down` to set the node group's desired size to 1 or 0. (`make gpu-nodes N=0|1` exists; the scale targets still drive the Auto Mode deployments.)
 - [ ] Note in DESIGN.md that node-group nodes carry no Auto Mode surcharge, and that we now own their AMI updates.
 - **Done when:** a fresh `make up` gives a 1.37 cluster with an empty GPU node group, `make scale-up` brings up a GPU node that joins, and `make down` removes it all.
 
 ## Phase 2: the NVIDIA DRA driver
 
-- [ ] Find where the driver chart's images live. Use a pull-through rule if the registry is supported; otherwise add `scripts/mirror-image.sh` (laptop, `skopeo` or `crane`, digest-preserving) and mirror them. Keep the script generic; the gateway images in Phase 5 use it too.
-- [ ] Install the driver with Helm on the GPU node group only, with the `MPSSupport` gate if Phase 0 said go. This is the first Helm install in the repo; add `helm` to preflight.
+- [x] Find where the driver chart's images live. Use a pull-through rule if the registry is supported; otherwise add `scripts/mirror-image.sh` (laptop, `skopeo` or `crane`, digest-preserving) and mirror them. Keep the script generic; the gateway images in Phase 5 use it too. (One image on `registry.k8s.io`, through a new pull-through rule. `scripts/mirror-image.sh` exists for Phase 5.)
+- [ ] Install the driver with Helm on the GPU node group only, with the `MPSSupport` gate if Phase 0 said go. This is the first Helm install in the repo; add `helm` to preflight. (`helm` is in preflight; values are in `spikes/mps/dra-values.yaml`.)
 - [ ] Switch the vLLM pod from `nvidia.com/gpu: 1` to a DRA claim.
 - **Done when:** the v1 chat model serves through a DRA claim on the node group, and nothing requests `nvidia.com/gpu`.
 
