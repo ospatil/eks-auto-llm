@@ -1,0 +1,53 @@
+# Spike 2a: mount the tiny FROM scratch image (spikes/image-volume/hello) as an
+# image volume, whole and with subPath, on both node types. subPath needs
+# containerd 2.2; if a pod fails with a subPath error, record that node's
+# containerd version (kubectl get node -o wide).
+#
+# __HELLO_IMAGE__ is the digest-pinned reference printed by push-image.sh.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: imgvol-auto
+  namespace: spike
+spec:
+  nodeSelector:
+    eks.amazonaws.com/compute-type: auto
+  restartPolicy: Never
+  containers:
+    - name: check
+      image: __PUB__/docker/library/busybox:1.37
+      command: ["sh", "-c", "set -x; ls -lR /data; cat /data/hello.txt; cat /sub/sub.txt; sleep 3600"]
+      volumeMounts:
+        - { name: hello, mountPath: /data, readOnly: true }
+        - { name: hello, mountPath: /sub, subPath: sub, readOnly: true }
+  volumes:
+    - name: hello
+      image:
+        reference: __HELLO_IMAGE__
+        pullPolicy: IfNotPresent
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: imgvol-nodegroup
+  namespace: spike
+spec:
+  nodeSelector:
+    eks-auto-llm/gpu: node-group
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+  restartPolicy: Never
+  containers:
+    - name: check
+      image: __PUB__/docker/library/busybox:1.37
+      command: ["sh", "-c", "set -x; ls -lR /data; cat /data/hello.txt; cat /sub/sub.txt; sleep 3600"]
+      volumeMounts:
+        - { name: hello, mountPath: /data, readOnly: true }
+        - { name: hello, mountPath: /sub, subPath: sub, readOnly: true }
+  volumes:
+    - name: hello
+      image:
+        reference: __HELLO_IMAGE__
+        pullPolicy: IfNotPresent

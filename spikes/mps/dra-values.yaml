@@ -1,0 +1,32 @@
+# Helm values for the NVIDIA DRA driver on the GPU node group (spike 3).
+# Chart: oci://registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu 0.5.1
+# Render with spikes/render.sh so the image comes from the pull-through cache.
+
+# Bottlerocket ships the NVIDIA driver on the host.
+nvidiaDriverRoot: /
+
+image:
+  repository: __K8S__/dra-driver-nvidia/dra-driver-nvidia-gpu
+
+# The node group turns Bottlerocket's device plugin off
+# (settings.kubelet-device-plugins.nvidia.enabled = false), so the driver may
+# manage the GPU. The chart refuses to install without this acknowledgement.
+gpuResourcesEnabledOverride: true
+
+resources:
+  gpus:
+    enabled: true
+  # ComputeDomains are for multi-node NVLink (IMEX); an A10G has none.
+  computeDomains:
+    enabled: false
+
+featureGates:
+  MPSSupport: true          # alpha: per-client memory and thread caps
+  TimeSlicingSettings: true # alpha: lets a claim set the time-slice interval
+
+kubeletPlugin:
+  # The chart's default affinity looks for NFD or GPU Operator labels, which
+  # these nodes don't have. Pin it to the node group's own label instead.
+  affinity: null
+  nodeSelector:
+    eks-auto-llm/gpu: node-group

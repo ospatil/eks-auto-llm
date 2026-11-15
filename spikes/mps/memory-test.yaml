@@ -1,0 +1,89 @@
+# Spike 3a: two pods on the one shared-gpu claim. Each allocates GPU memory in
+# 1 GiB steps until CUDA refuses, prints how far it got, then holds it so
+# nvidia-smi shows both processes. With the claim's 10Gi default:
+#   - mps-big asks for 14G: does the client raise its cap, or is 10Gi a ceiling?
+#   - mps-small asks for 4G: does the client lower its cap?
+# Under time-slicing there is no cap: whichever starts first takes the GPU.
+#
+# Uses the vLLM DLC image (CUDA + PyTorch, already in the pull-through cache)
+# so no new image is needed.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gpu-fill
+  namespace: spike
+data:
+  fill.py: |
+    import os, time, torch
+    print("CUDA_MPS_PINNED_DEVICE_MEM_LIMIT =", os.environ.get("CUDA_MPS_PINNED_DEVICE_MEM_LIMIT"))
+    free, total = torch.cuda.mem_get_info()
+    print(f"reported free={free / 2**30:.1f} GiB total={total / 2**30:.1f} GiB", flush=True)
+    held = []
+    try:
+        while True:
+            held.append(torch.empty(2**30, dtype=torch.uint8, device="cuda"))
+    except RuntimeError as e:
+        print(f"allocated {len(held)} GiB, then: {str(e).splitlines()[0]}", flush=True)
+    time.sleep(10**9)
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mps-big
+  namespace: spike
+spec:
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+  restartPolicy: Never
+  resourceClaims:
+    - name: gpu
+      resourceClaimName: shared-gpu
+  containers:
+    - name: fill
+      image: __VLLM_IMAGE__
+      command: ["python3", "/scripts/fill.py"]
+      env:
+        - name: CUDA_MPS_PINNED_DEVICE_MEM_LIMIT
+          value: "0=14G"
+      resources:
+        claims:
+          - name: gpu
+      volumeMounts:
+        - { name: scripts, mountPath: /scripts }
+  volumes:
+    - name: scripts
+      configMap:
+        name: gpu-fill
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mps-small
+  namespace: spike
+spec:
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+  restartPolicy: Never
+  resourceClaims:
+    - name: gpu
+      resourceClaimName: shared-gpu
+  containers:
+    - name: fill
+      image: __VLLM_IMAGE__
+      command: ["python3", "/scripts/fill.py"]
+      env:
+        - name: CUDA_MPS_PINNED_DEVICE_MEM_LIMIT
+          value: "0=4G"
+      resources:
+        claims:
+          - name: gpu
+      volumeMounts:
+        - { name: scripts, mountPath: /scripts }
+  volumes:
+    - name: scripts
+      configMap:
+        name: gpu-fill

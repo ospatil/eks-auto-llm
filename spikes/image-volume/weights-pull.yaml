@@ -1,0 +1,30 @@
+# Spike 2b: time the pull of a ~15 GB weights image on the GPU node. The pod
+# does nothing but list the files; the time to measure is from pod creation to
+# Running (kubectl get events, or the "Pulled" event's message, which gives the
+# pull duration). Delete and re-create it to see the cached case.
+#
+# __WEIGHTS_IMAGE__ is the digest-pinned reference printed by push-image.sh.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: weights-pull
+  namespace: spike
+spec:
+  nodeSelector:
+    eks-auto-llm/gpu: node-group
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+  restartPolicy: Never
+  containers:
+    - name: check
+      image: __PUB__/docker/library/busybox:1.37
+      command: ["sh", "-c", "date; ls -la /models/weights; du -sh /models/weights; sleep 3600"]
+      volumeMounts:
+        - { name: weights, mountPath: /models/weights, readOnly: true }
+  volumes:
+    - name: weights
+      image:
+        reference: __WEIGHTS_IMAGE__
+        pullPolicy: IfNotPresent

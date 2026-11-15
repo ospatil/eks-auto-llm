@@ -1,0 +1,26 @@
+# Fallback if MPS fails: the same shared claim with time-slicing. The pods take
+# turns on the whole GPU and there is no memory cap: one pod can take all of
+# it. Delete claim-mps.yaml's claim first; both are named shared-gpu so the
+# test pods don't change.
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaim
+metadata:
+  name: shared-gpu
+  namespace: spike
+spec:
+  devices:
+    requests:
+      - name: gpu
+        exactly:
+          deviceClassName: gpu.nvidia.com
+    config:
+      - requests: ["gpu"]
+        opaque:
+          driver: gpu.nvidia.com
+          parameters:
+            apiVersion: resource.nvidia.com/v1beta1
+            kind: GpuConfig
+            sharing:
+              strategy: TimeSlicing
+              timeSlicingConfig:
+                interval: Default

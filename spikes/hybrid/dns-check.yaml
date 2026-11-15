@@ -1,0 +1,57 @@
+# Spike 1: one pod on an Auto Mode node and one on the GPU node group, each
+# checking DNS, the Kubernetes API Service and an AWS endpoint. Run them while
+# the GPU node group is scaled to 1. The node-group pod tolerates the GPU taint
+# but requests no GPU.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: net-auto
+  namespace: spike
+spec:
+  nodeSelector:
+    eks.amazonaws.com/compute-type: auto
+  restartPolicy: Never
+  containers:
+    - name: check
+      image: __PUB__/docker/library/busybox:1.37
+      command: ["sh", "-c"]
+      args:
+        - |
+          set -x
+          cat /etc/resolv.conf
+          nslookup kubernetes.default.svc.cluster.local
+          nslookup sts.${AWS_REGION}.amazonaws.com
+          wget -q -T 5 -O /dev/null --no-check-certificate https://kubernetes.default.svc/healthz; echo "api rc=$?"
+          sleep 3600
+      env:
+        - name: AWS_REGION
+          value: ca-central-1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: net-nodegroup
+  namespace: spike
+spec:
+  nodeSelector:
+    eks-auto-llm/gpu: node-group
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+  restartPolicy: Never
+  containers:
+    - name: check
+      image: __PUB__/docker/library/busybox:1.37
+      command: ["sh", "-c"]
+      args:
+        - |
+          set -x
+          cat /etc/resolv.conf
+          nslookup kubernetes.default.svc.cluster.local
+          nslookup sts.${AWS_REGION}.amazonaws.com
+          wget -q -T 5 -O /dev/null --no-check-certificate https://kubernetes.default.svc/healthz; echo "api rc=$?"
+          sleep 3600
+      env:
+        - name: AWS_REGION
+          value: ca-central-1

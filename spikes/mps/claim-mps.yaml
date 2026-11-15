@@ -1,0 +1,29 @@
+# One ResourceClaim for the whole GPU, shared through MPS. Every pod that names
+# this claim (resourceClaimName: shared-gpu) becomes an MPS client of the same
+# A10G. The defaults below apply to each client; memory-test.yaml checks
+# whether a client can lower (or raise) its own memory cap with
+# CUDA_MPS_PINNED_DEVICE_MEM_LIMIT, which is how two pods would get different
+# caps from one claim.
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaim
+metadata:
+  name: shared-gpu
+  namespace: spike
+spec:
+  devices:
+    requests:
+      - name: gpu
+        exactly:
+          deviceClassName: gpu.nvidia.com
+    config:
+      - requests: ["gpu"]
+        opaque:
+          driver: gpu.nvidia.com
+          parameters:
+            apiVersion: resource.nvidia.com/v1beta1
+            kind: GpuConfig
+            sharing:
+              strategy: MPS
+              mpsConfig:
+                defaultActiveThreadPercentage: 50
+                defaultPinnedDeviceMemoryLimit: 10Gi

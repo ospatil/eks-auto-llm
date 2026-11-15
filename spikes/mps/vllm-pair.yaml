@@ -1,0 +1,99 @@
+# Spike 3b: two small vLLM servers on the one shared-gpu claim, each loading
+# the same small model from an image volume (push it with push-image.sh, e.g.
+# Qwen2.5-0.5B-Instruct, and set SMALL_IMAGE). Start vllm-a, wait for Ready,
+# then start vllm-b: vLLM measures free memory at startup, so the order and
+# --gpu-memory-utilization (a fraction of the whole GPU) are what this tests.
+#
+# Delete memory-test.yaml's pods first so the GPU is empty.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vllm-a
+  namespace: spike
+  labels: { spike: vllm-pair }
+spec:
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+  resourceClaims:
+    - name: gpu
+      resourceClaimName: shared-gpu
+  containers:
+    - name: vllm
+      image: __VLLM_IMAGE__
+      args:
+        - "--model=/models/small"
+        - "--served-model-name=a"
+        - "--host=0.0.0.0"
+        - "--port=8000"
+        - "--gpu-memory-utilization=0.30"
+        - "--max-model-len=4096"
+      env:
+        # The model is a local path, so nothing should need the Hub.
+        - { name: HF_HUB_OFFLINE, value: "1" }
+        - { name: CUDA_MPS_PINNED_DEVICE_MEM_LIMIT, value: "0=8G" }
+      ports:
+        - containerPort: 8000
+      readinessProbe:
+        httpGet: { path: /health, port: 8000 }
+        periodSeconds: 5
+      resources:
+        claims:
+          - name: gpu
+      volumeMounts:
+        - { name: model, mountPath: /models/small, readOnly: true }
+        - { name: shm, mountPath: /dev/shm }
+  volumes:
+    - name: model
+      image:
+        reference: __SMALL_IMAGE__
+        pullPolicy: IfNotPresent
+    - name: shm
+      emptyDir: { medium: Memory, sizeLimit: 1Gi }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vllm-b
+  namespace: spike
+  labels: { spike: vllm-pair }
+spec:
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+  resourceClaims:
+    - name: gpu
+      resourceClaimName: shared-gpu
+  containers:
+    - name: vllm
+      image: __VLLM_IMAGE__
+      args:
+        - "--model=/models/small"
+        - "--served-model-name=b"
+        - "--host=0.0.0.0"
+        - "--port=8000"
+        - "--gpu-memory-utilization=0.30"
+        - "--max-model-len=4096"
+      env:
+        - { name: HF_HUB_OFFLINE, value: "1" }
+        - { name: CUDA_MPS_PINNED_DEVICE_MEM_LIMIT, value: "0=8G" }
+      ports:
+        - containerPort: 8000
+      readinessProbe:
+        httpGet: { path: /health, port: 8000 }
+        periodSeconds: 5
+      resources:
+        claims:
+          - name: gpu
+      volumeMounts:
+        - { name: model, mountPath: /models/small, readOnly: true }
+        - { name: shm, mountPath: /dev/shm }
+  volumes:
+    - name: model
+      image:
+        reference: __SMALL_IMAGE__
+        pullPolicy: IfNotPresent
+    - name: shm
+      emptyDir: { medium: Memory, sizeLimit: 1Gi }
