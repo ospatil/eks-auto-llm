@@ -11,11 +11,15 @@
 #   MODELS       space-separated HuggingFace repo ids (default: the two below)
 #   WEIGHTS_DIR  parent directory (default: models/ in the repo); one folder per model
 #   HF_TOKEN     only needed for gated models (e.g. Llama); Qwen needs none
+#   HF_HUB_DOWNLOAD_TIMEOUT  seconds before a silent connection is retried (default: 60)
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 MODELS="${MODELS:-Qwen/Qwen2.5-7B-Instruct Qwen/Qwen2.5-0.5B-Instruct}"
 WEIGHTS_DIR="${WEIGHTS_DIR:-models}"
+# Without a read timeout, `hf download` can wait forever on a connection the
+# server has already closed (seen 2026-11-15: two shards stalled for 40 min).
+export HF_HUB_DOWNLOAD_TIMEOUT="${HF_HUB_DOWNLOAD_TIMEOUT:-60}"
 
 # Use an installed `hf` if there is one, otherwise an isolated venv as in
 # stage-model.sh.
