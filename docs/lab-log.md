@@ -41,6 +41,12 @@ Open questions the spikes should answer:
   - A `docker-container` buildx builder can't push to a registry on the host's `localhost`. That only affects the local test, which uses the daemon's builder.
   - The driver's init container waits for `nvidia-smi` and `libnvidia-ml.so.1` under `nvidiaDriverRoot`. Where Bottlerocket keeps them is unconfirmed, and AWS's docs disagree on whether the DRA driver supports Bottlerocket. Added `gpu_ami_type = "AL2023_x86_64_NVIDIA"` as a one-line fallback.
 
+## 2026-11-15: preflight against AWS
+
+- Credentials work. `session-manager-plugin` was missing (`brew install --cask session-manager-plugin`).
+- **G/VT on-demand vCPU quota in ca-central-1 was 0.** Requested 4 (enough for one `g5.xlarge`) at 10:58 ET; status PENDING. Check with `aws service-quotas list-requested-service-quota-change-history-by-quota --service-code ec2 --quota-code L-DB2E81BA --region ca-central-1`.
+- `g5.xlarge` is offered in ca-central-1a and 1b, the two zones the VPC uses. No EKS clusters exist in the region yet.
+
 ## Spike results
 
 | Spike | Result | Go / no-go | Notes |
