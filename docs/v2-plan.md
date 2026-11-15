@@ -10,9 +10,11 @@ Phase 0 prep and local verification are done; nothing has been applied to AWS ye
 - The spike stack is `SPIKE=1` on any `make` target (own workspace, `terraform/spike.tfvars`, own project name).
 - Verified offline: `make test` (plan tests with mocked AWS) and `spikes/local/verify.sh` on kind (33 checks).
 
+**Waiting on:** the GPU vCPU quota increase in ca-central-1 (0 → 4), requested 2026-11-15 and pending. Everything else in preflight passes.
+
 **To resume:**
 
-1. Log in to AWS, then `make preflight` (credentials, buildx, helm, GPU quota).
+1. Log in to AWS, then `make preflight`. Continue once the GPU quota shows ≥ 4; the check command is in the lab log. Don't file a second request.
 2. Optional re-check: `make test`, then `spikes/local/up.sh && spikes/local/verify.sh` (needs Colima running: `colima start`).
 3. With the owner's go-ahead: `make up SPIKE=1` and follow [spikes/README.md](../spikes/README.md) from "Bring it up". Run the GPU parts in one session and scale back with `make gpu-nodes N=0 SPIKE=1`.
 4. Record results in the lab log, then `make down SPIKE=1`.
