@@ -4,6 +4,7 @@
 #   make preflight        # checks creds, tooling, GPU quota
 #   make up               # provision infra (VPC, EKS Auto Mode, S3, ECR, tunnel)
 #   make stage            # download model weights -> S3 (out-of-band, your laptop)
+#   make weights          # download model weights -> ~/models (no AWS; for the spikes)
 #   make prewarm          # warm the ECR pull-through cache with the vLLM image
 #   make image            # build + push the Streamlit image to ECR
 #   make tunnel           # (terminal 1) open SSM tunnel to the private API
@@ -29,7 +30,7 @@ export KUBECONFIG_FILE := $(CURDIR)/kubeconfig-spike
 export LOCAL_PORT := 8444
 endif
 
-.PHONY: help preflight init up stage prewarm image tunnel deploy verify scale-down scale-up gpu-nodes down fmt validate test output diagrams
+.PHONY: help preflight init up stage weights prewarm image tunnel deploy verify scale-down scale-up gpu-nodes down fmt validate test output diagrams
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -47,6 +48,9 @@ up: ## Provision infrastructure (idempotent)
 
 stage: ## Download model weights to S3 (out-of-band)
 	@bash scripts/stage-model.sh
+
+weights: ## Download model weights to ~/models for image packaging (no AWS needed)
+	@bash scripts/download-weights.sh
 
 prewarm: ## Warm the ECR pull-through cache with the vLLM image
 	@bash scripts/prewarm-image.sh

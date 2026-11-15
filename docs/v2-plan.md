@@ -14,7 +14,7 @@ Phase 0 prep and local verification are done; nothing has been applied to AWS ye
 
 **To resume:**
 
-1. The day before: download the weights to the laptop (see "Before the session" in [spikes/README.md](../spikes/README.md#before-the-session)), so the download isn't on the clock.
+1. The day before: `make weights` downloads both models to `~/models` (see "Before the session" in [spikes/README.md](../spikes/README.md#before-the-session)), so the download isn't on the clock.
 2. Log in to AWS, then `make preflight`. Optional re-check: `make test`.
 3. With the owner's go-ahead: `make up SPIKE=1` and follow the [one-sitting order](../spikes/README.md#one-sitting-order). The GPU goes on only after the images are pushed, and back to 0 as soon as spike 3 is done.
 4. Record results and the hours in the lab log, then `make down SPIKE=1` the same day.

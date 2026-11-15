@@ -24,9 +24,8 @@ spikes/local/down.sh
 Free, and best done the day before so the stack isn't running while it downloads:
 
 ```bash
-hf download Qwen/Qwen2.5-7B-Instruct   --local-dir <weights dir>    # ~15 GB, spike 2
-hf download Qwen/Qwen2.5-0.5B-Instruct --local-dir <small dir>      # spike 3
-colima start                                                        # docker for push-image.sh
+make weights      # ~/models/Qwen2.5-7B-Instruct (~15 GB, spike 2) and Qwen2.5-0.5B-Instruct (spike 3)
+colima start      # docker for push-image.sh
 ```
 
 ## One-sitting order
@@ -92,10 +91,10 @@ spikes/render.sh spikes/image-volume/pods.yaml | kubectl apply -f -
 kubectl -n spike logs imgvol-auto; kubectl -n spike logs imgvol-nodegroup
 ```
 
-Then the real size, with the weights already on your laptop from `make stage` (or `hf download Qwen/Qwen2.5-7B-Instruct --local-dir ...`):
+Then the real size, with the weights already on your laptop from `make weights`:
 
 ```bash
-spikes/push-image.sh qwen2.5-7b-instruct <weights dir>    # time the push
+spikes/push-image.sh qwen2.5-7b-instruct ~/models/Qwen2.5-7B-Instruct    # time the push
 export WEIGHTS_IMAGE=<that reference>
 spikes/render.sh spikes/image-volume/weights-pull.yaml | kubectl apply -f -
 kubectl -n spike get events --field-selector involvedObject.name=weights-pull -w
@@ -128,7 +127,7 @@ kubectl -n spike logs mps-big; kubectl -n spike logs mps-small
 kubectl -n spike exec mps-big -- nvidia-smi
 ```
 
-Then two vLLM servers. Push a small model (`hf download Qwen/Qwen2.5-0.5B-Instruct --local-dir ...`, then `spikes/push-image.sh qwen2.5-0.5b-instruct <dir>`) and set `SMALL_IMAGE`:
+Then two vLLM servers. Push the small model from `make weights` (`spikes/push-image.sh qwen2.5-0.5b-instruct ~/models/Qwen2.5-0.5B-Instruct`) and set `SMALL_IMAGE`:
 
 ```bash
 kubectl -n spike delete pod mps-big mps-small
