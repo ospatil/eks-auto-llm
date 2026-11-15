@@ -45,7 +45,7 @@ output "k8s_cache_prefix" {
 
 output "gpu_node_group" {
   description = "Managed GPU node group name (empty when enable_gpu_node_group = false)."
-  value       = var.enable_gpu_node_group ? split(":", module.eks.eks_managed_node_groups["gpu"].node_group_id)[1] : ""
+  value       = var.enable_gpu_node_group ? local.gpu_node_group_name : ""
 }
 
 output "model_id" {

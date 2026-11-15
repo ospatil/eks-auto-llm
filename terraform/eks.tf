@@ -9,6 +9,10 @@
 # v21 input names differ from v20 (name/kubernetes_version/endpoint_*). Pinned
 # to ~> 21.0 which added these and native compute_config (Auto Mode) support.
 
+locals {
+  gpu_node_group_name = "gpu"
+}
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 21.0"
@@ -53,7 +57,7 @@ module "eks" {
 
   eks_managed_node_groups = var.enable_gpu_node_group ? {
     gpu = {
-      name            = "gpu"
+      name            = local.gpu_node_group_name
       use_name_prefix = false
 
       ami_type       = "BOTTLEROCKET_x86_64_NVIDIA"
