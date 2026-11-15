@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Pre-warm the ECR pull-through cache with the vLLM image.
+# Pre-warm the ECR pull-through cache with the vLLM image, or with the
+# pull-through URIs given as arguments, e.g. the NVIDIA DRA driver:
+#   scripts/prewarm-image.sh "$(tofu -chdir=terraform output -raw k8s_cache_prefix)/dra-driver-nvidia/dra-driver-nvidia-gpu:v0.5.1"
 #
 # The cluster has no internet egress. ECR's pull-through cache fetches from the
 # upstream (public.ecr.aws) SERVER-SIDE, but to avoid any first-pull edge cases
@@ -17,20 +19,26 @@ TF_DIR="terraform"
 
 tf() { if command -v tofu >/dev/null 2>&1; then tofu -chdir="$TF_DIR" "$@"; else terraform -chdir="$TF_DIR" "$@"; fi; }
 
-IMAGE_URI="$(tf output -raw vllm_image_uri)"
-REGISTRY="${IMAGE_URI%%/*}"
+if [ "$#" -gt 0 ]; then
+  IMAGES=("$@")
+else
+  IMAGES=("$(tf output -raw vllm_image_uri)")
+fi
+REGISTRY="${IMAGES[0]%%/*}"
 
-echo "Pull-through image: ${IMAGE_URI}"
+printf 'Pull-through image: %s\n' "${IMAGES[@]}"
 echo
 
 echo "Logging in to ECR (your private registry)…"
 aws ecr get-login-password --region "$REGION" \
   | docker login --username AWS --password-stdin "$REGISTRY"
 
-echo "Pulling through the cache (ECR fetches from public.ecr.aws server-side)…"
+echo "Pulling through the cache (ECR fetches from the upstream server-side)…"
 echo "First pull populates the cache; this can take a few minutes for a large image."
-docker pull --platform linux/amd64 "$IMAGE_URI"
+for image in "${IMAGES[@]}"; do
+  docker pull --platform linux/amd64 "$image"
+done
 
 echo
-echo "Cache warmed. Nodes can now pull ${IMAGE_URI} with no internet egress."
-echo "(You can 'docker rmi ${IMAGE_URI}' locally - the cached copy lives in ECR.)"
+echo "Cache warmed. Nodes can now pull these with no internet egress."
+echo "(You can 'docker rmi' them locally - the cached copies live in ECR.)"

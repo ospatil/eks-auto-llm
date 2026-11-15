@@ -35,6 +35,12 @@ fi
 need aws "install AWS CLI v2"
 need kubectl "install kubectl"
 need session-manager-plugin "install the AWS SSM Session Manager plugin"
+need helm "install Helm (brew install helm) - v2 installs the NVIDIA DRA driver and the gateway with it"
+if command -v crane >/dev/null 2>&1 || command -v skopeo >/dev/null 2>&1; then
+  green "  ✓ crane or skopeo found"
+else
+  yellow "  ~ neither crane nor skopeo found - only needed by scripts/mirror-image.sh (brew install crane)"
+fi
 
 echo "== AWS credentials =="
 if ident=$(aws sts get-caller-identity --output text --query 'Arn' 2>/dev/null); then
