@@ -29,10 +29,22 @@ You need:
 - OpenTofu (`brew install opentofu`) or Terraform. The Makefile uses whichever it finds.
 - The AWS CLI, logged in to the account you want to use.
 - `session-manager-plugin`, for the tunnel.
-- `kubectl` and `docker`.
+- `kubectl` and `docker`, with the `buildx` plugin. With Homebrew: `brew install docker-buildx`, then add `"cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]` to `~/.docker/config.json`.
+- `helm` (`brew install helm`). The v2 branch installs the NVIDIA DRA driver with it.
+- Optional: `crane` (`brew install crane`) or `skopeo`, only for `scripts/mirror-image.sh`.
 - GPU quota in `ca-central-1`: at least 4 vCPUs of "Running On-Demand G and VT instances".
 
 The quota is the usual blocker. New accounts often start at 0, and an increase can take about a day. `make preflight` checks it and prints the request command if it is too low.
+
+## v2 in progress
+
+This branch, `v2`, is changing the stack: two models sharing one GPU through a managed node group, weights shipped as images, and an inference-aware gateway. The [`v1` tag](../../tree/v1) on `main` is the stack this README describes. Until v2 is finished, the steps above still apply; the v2 work runs on a separate spike stack:
+
+- [`docs/v2-plan.md`](./docs/v2-plan.md): the plan, with a status section at the top saying where it stands and how to resume.
+- [`spikes/README.md`](./spikes/README.md): the runbook. It covers the free local checks on kind (`make test`, `spikes/local/up.sh`, needs Colima or Docker Desktop), `make weights` to download the models the day before, and the cloud spike in one sitting.
+- [`docs/lab-log.md`](./docs/lab-log.md): what was run, what broke, timings and cost.
+
+Add `SPIKE=1` to any `make` target to work on the spike stack instead of this one. It has its own Terraform workspace, project name and kubeconfig, so the two can exist side by side.
 
 ## Run it
 
@@ -147,8 +159,11 @@ terraform/      infrastructure: VPC, EKS Auto Mode, endpoints, IAM, S3, ECR, tun
 k8s/            workloads: GPU NodePool, namespace and service account, vLLM, Streamlit
 src/streamlit/  the chat app
 scripts/        what the make targets run
+spikes/         v2 Phase 0 experiments and their runbook (removed before v2 merges)
+models/         weights from `make weights` (git-ignored)
 diagrams/       draw.io sources; `make diagrams` exports them to docs/diagrams/*.png
 DESIGN.md       why each choice was made
+docs/           the primer, the deck, the v2 plan and the lab log
 ```
 
 Infrastructure and workloads are applied separately on purpose. Terraform only talks to AWS, so it runs from anywhere. The Kubernetes manifests have to go through the tunnel, because the API isn't reachable from outside the VPC. Keeping them apart also keeps `destroy` reliable.
