@@ -46,6 +46,26 @@ Open questions the spikes should answer:
 - Credentials work. `session-manager-plugin` was missing; installed with `brew install --cask session-manager-plugin` (needs your password, so run it yourself). Preflight now passes everything except the quota.
 - **G/VT on-demand vCPU quota in ca-central-1 was 0.** Requested 4 (enough for one `g5.xlarge`) at 10:58 ET; status PENDING. Check with `aws service-quotas list-requested-service-quota-change-history-by-quota --service-code ec2 --quota-code L-DB2E81BA --region ca-central-1`.
 - `g5.xlarge` is offered in ca-central-1a and 1b, the two zones the VPC uses. No EKS clusters exist in the region yet.
+- Later the same day: the quota request shows `CASE_CLOSED` and "Running On-Demand G and VT instances" is now 4. Nothing is blocking the spike.
+
+## 2026-11-15: cost estimate for the spike
+
+On-demand list prices in ca-central-1, before anything has run. Replace with the real bill afterwards.
+
+| Item | ≈ per hour |
+|---|---|
+| `g5.xlarge` (only while the node group is at 1) | $1.10 |
+| EKS control plane | $0.10 |
+| 9 interface endpoints × 2 AZs (~$0.011 each per AZ) | $0.20 |
+| `t3.small` bastion | $0.02 |
+| Auto Mode nodes and EBS | ~$0.05 |
+| **Stack up, GPU at 0** | **~$0.35–0.40** |
+| **Stack up, GPU at 1** | **~$1.45–1.50** |
+
+- One sitting, 8–10 h up with the GPU on for ~3 h: about $7–10. Left up over a weekend: $25–30. GPU forgotten for a day: ~$35.
+- ECR storage and endpoint data are cents. No NAT.
+- The README and the deck counted endpoints at $0.01 each, but they are billed per AZ. Both now give the v1 stack as about $1.45–1.60 an hour running and $0.30–0.35 scaled to zero.
+- Plan: one sitting, GPU on only for the spikes that need it, `make down SPIKE=1` the same day. Order is in [spikes/README.md](../spikes/README.md#one-sitting-order).
 
 ## Spike results
 

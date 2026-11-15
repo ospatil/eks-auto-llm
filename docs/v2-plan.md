@@ -10,14 +10,14 @@ Phase 0 prep and local verification are done; nothing has been applied to AWS ye
 - The spike stack is `SPIKE=1` on any `make` target (own workspace, `terraform/spike.tfvars`, own project name).
 - Verified offline: `make test` (plan tests with mocked AWS) and `spikes/local/verify.sh` on kind (33 checks).
 
-**Waiting on:** the GPU vCPU quota increase in ca-central-1 (0 → 4), requested 2026-11-15 and pending. Everything else in preflight passes.
+**Not blocked.** The GPU vCPU quota in ca-central-1 is now 4 (approved 2026-11-15). The cloud spike is planned for one sitting in the week of 2026-11-16, estimated at $7–10 (breakdown in the lab log).
 
 **To resume:**
 
-1. Log in to AWS, then `make preflight`. Continue once the GPU quota shows ≥ 4; the check command is in the lab log. Don't file a second request.
-2. Optional re-check: `make test`, then `spikes/local/up.sh && spikes/local/verify.sh` (needs Colima running: `colima start`).
-3. With the owner's go-ahead: `make up SPIKE=1` and follow [spikes/README.md](../spikes/README.md) from "Bring it up". Run the GPU parts in one session and scale back with `make gpu-nodes N=0 SPIKE=1`.
-4. Record results in the lab log, then `make down SPIKE=1`.
+1. The day before: download the weights to the laptop (see "Before the session" in [spikes/README.md](../spikes/README.md#before-the-session)), so the download isn't on the clock.
+2. Log in to AWS, then `make preflight`. Optional re-check: `make test`.
+3. With the owner's go-ahead: `make up SPIKE=1` and follow the [one-sitting order](../spikes/README.md#one-sitting-order). The GPU goes on only after the images are pushed, and back to 0 as soon as spike 3 is done.
+4. Record results and the hours in the lab log, then `make down SPIKE=1` the same day.
 
 ## What v2 changes
 

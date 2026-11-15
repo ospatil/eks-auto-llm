@@ -254,8 +254,8 @@ make deploy      # NodePool, vLLM, Streamlit
 make verify      # chat at localhost:8501
 ```
 
-- **Running:** about $1.25-1.50 an hour, almost all of it the GPU.
-- **`make scale-down`:** about $0.15-0.20 an hour. `scale-up` is back in 2-4 minutes.
+- **Running:** about $1.45-1.60 an hour, most of it the GPU.
+- **`make scale-down`:** about $0.30-0.35 an hour, mostly the control plane and the VPC endpoints. `scale-up` is back in 2-4 minutes.
 - **`make down`:** removes everything, including the ECR cache repository Terraform doesn't know about.
 
 ---

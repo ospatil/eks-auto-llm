@@ -19,6 +19,28 @@ spikes/local/down.sh
 
 `push-image.sh` needs `docker buildx`. If your default builder is a `docker-container` one, pushing to ECR still works, but the 15 GB build context gets copied into the builder container first; `BUILDX_BUILDER=<your docker context>` uses the daemon directly.
 
+## Before the session
+
+Free, and best done the day before so the stack isn't running while it downloads:
+
+```bash
+hf download Qwen/Qwen2.5-7B-Instruct   --local-dir <weights dir>    # ~15 GB, spike 2
+hf download Qwen/Qwen2.5-0.5B-Instruct --local-dir <small dir>      # spike 3
+colima start                                                        # docker for push-image.sh
+```
+
+## One-sitting order
+
+The stack costs about $0.35 an hour, and $1.45 with the GPU node (see the lab log). To keep the GPU hours down:
+
+1. `make preflight`, `make up SPIKE=1`, the prewarm steps under "Bring it up". GPU at 0.
+2. Push the images while the GPU is still at 0: `hello`, `qwen2.5-7b-instruct` and `qwen2.5-0.5b-instruct`. The 15 GB push is the slow part and depends on your upload speed.
+3. `make gpu-nodes N=1 SPIKE=1`, then spike 1, spike 2 (the pods only, the images are already pushed) and spike 3.
+4. `make gpu-nodes N=0 SPIKE=1` as soon as spike 3 is done. Write up the results with the GPU off.
+5. `make down SPIKE=1` the same day, and check that nothing is left.
+
+If the AL2023 fallback is needed in spike 3, the `make up SPIKE=1` that switches it replaces the GPU node; budget another 15–20 minutes of GPU time.
+
 ## Bring it up
 
 ```bash

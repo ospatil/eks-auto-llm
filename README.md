@@ -64,8 +64,8 @@ When you are done, `make down` removes everything.
 
 The GPU is almost the whole bill:
 
-- **Running:** about \$1.25-1.50 an hour. The `g5.xlarge` is about \$1.00; the rest is the EKS control plane (\$0.10), the Auto Mode surcharge, about eight interface endpoints (\$0.01 each) and the `t3.small` tunnel instance.
-- **Scaled to zero:** about \$0.15-0.20 an hour, for the control plane, endpoints and tunnel.
+- **Running:** about \$1.45-1.60 an hour. The `g5.xlarge` is about \$1.10; the rest is the EKS control plane (\$0.10), the Auto Mode surcharge, eight interface endpoints and the `t3.small` tunnel instance. Interface endpoints are billed per AZ, so eight endpoints in two AZs are about \$0.18 an hour.
+- **Scaled to zero:** about \$0.30-0.35 an hour, for the control plane, endpoints and tunnel.
 - **Torn down:** nothing.
 
 Prices vary by region. There is no NAT gateway, which is a cost saving as well as a security one.
