@@ -11,6 +11,9 @@
 #   make deploy           # (terminal 2) apply GPU NodePool + vLLM + Streamlit
 #   make verify           # port-forward Streamlit to http://localhost:8501
 #   make down             # tear everything down
+#
+# Add SPIKE=1 to any target to work on the Phase 0 spike stack instead: its own
+# workspace (state), terraform/spike.tfvars, kubeconfig-spike and tunnel :8444.
 
 REGION ?= ca-central-1
 export REGION
@@ -19,7 +22,14 @@ export REGION
 TF := $(shell command -v tofu >/dev/null 2>&1 && echo "tofu" || echo "terraform")
 TF_DIR := terraform
 
-.PHONY: help preflight init up stage prewarm image tunnel deploy verify scale-down scale-up down fmt validate output diagrams
+ifdef SPIKE
+export TF_WORKSPACE := spike
+TF_VARS := -var-file=spike.tfvars
+export KUBECONFIG_FILE := $(CURDIR)/kubeconfig-spike
+export LOCAL_PORT := 8444
+endif
+
+.PHONY: help preflight init up stage prewarm image tunnel deploy verify scale-down scale-up gpu-nodes down fmt validate output diagrams
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -33,7 +43,7 @@ init: ## tofu/terraform init
 
 up: ## Provision infrastructure (idempotent)
 	$(TF) -chdir=$(TF_DIR) init -upgrade
-	$(TF) -chdir=$(TF_DIR) apply -var="region=$(REGION)"
+	$(TF) -chdir=$(TF_DIR) apply -var="region=$(REGION)" $(TF_VARS)
 
 stage: ## Download model weights to S3 (out-of-band)
 	@bash scripts/stage-model.sh
@@ -63,8 +73,15 @@ scale-up: ## Restart the model (scale back to 1); provisions a fresh GPU node (n
 	@echo "Scaling up. Karpenter provisions a GPU node (~2 min) then vLLM streams weights."
 	@echo "Watch: kubectl -n llm get pods -w"
 
+gpu-nodes: ## Set the GPU node group's size: make gpu-nodes N=1 (or N=0)
+	@test -n "$(N)" || { echo "usage: make gpu-nodes N=0|1"; exit 1; }
+	aws eks update-nodegroup-config --region $(REGION) \
+	  --cluster-name "$$($(TF) -chdir=$(TF_DIR) output -raw cluster_name)" \
+	  --nodegroup-name "$$($(TF) -chdir=$(TF_DIR) output -raw gpu_node_group)" \
+	  --scaling-config minSize=0,maxSize=1,desiredSize=$(N) --query 'update.status' --output text
+
 down: ## Tear everything down (cluster cleanup, then destroy)
-	@bash scripts/destroy.sh -var="region=$(REGION)"
+	@bash scripts/destroy.sh -var="region=$(REGION)" $(TF_VARS)
 
 fmt: ## Format terraform
 	$(TF) -chdir=$(TF_DIR) fmt -recursive

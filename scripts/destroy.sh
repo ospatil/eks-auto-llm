@@ -29,15 +29,25 @@ else
   echo "  (cluster unreachable or already gone - skipping; Auto Mode self-cleans)"
 fi
 
-echo "== Step 2: delete the auto-created pull-through cache repo =="
-# The pull-through cache rule auto-creates a backing repo (ecr-public/...) that
-# Terraform doesn't manage, so `destroy` won't remove it. Delete it explicitly.
-PT_REPO="ecr-public/$(tf output -raw vllm_image_uri 2>/dev/null | sed -E 's#.*/ecr-public/##; s#:.*##')"
-if [ "$PT_REPO" != "ecr-public/" ]; then
-  echo "  Deleting ECR repo ${PT_REPO} (if present)…"
-  aws ecr delete-repository --repository-name "$PT_REPO" --force \
-    --region "${REGION:-ca-central-1}" 2>/dev/null \
-    && echo "  deleted" || echo "  (not present / already gone)"
+echo "== Step 2: delete the ECR repos Terraform doesn't manage =="
+# Pull-through cache rules auto-create their backing repos (<project>-pub/...,
+# <project>-k8s/...), and mirror-image.sh / package-model.sh create repos under
+# <project>/. Terraform doesn't manage any of those, so `destroy` won't remove
+# them. Every name starts with the project, which keeps other repos safe.
+PROJECT="$(tf output -raw project 2>/dev/null || true)"
+STREAMLIT_REPO="$(tf output -raw ecr_streamlit_repo_url 2>/dev/null | sed -E 's#^[^/]+/##' || true)"
+if [ -n "$PROJECT" ]; then
+  repos="$(aws ecr describe-repositories --region "${REGION:-ca-central-1}" \
+    --query 'repositories[].repositoryName' --output text 2>/dev/null | tr '\t' '\n' \
+    | grep -E "^${PROJECT}(-pub|-k8s)?/" | grep -vxF "${STREAMLIT_REPO:-none}" || true)"
+  for repo in $repos; do
+    echo "  Deleting ECR repo ${repo}…"
+    aws ecr delete-repository --repository-name "$repo" --force \
+      --region "${REGION:-ca-central-1}" >/dev/null && echo "  deleted" || echo "  (failed - check by hand)"
+  done
+  [ -n "$repos" ] || echo "  (none present)"
+else
+  echo "  (no Terraform outputs - skipping)"
 fi
 
 echo "== Step 3: tofu destroy =="

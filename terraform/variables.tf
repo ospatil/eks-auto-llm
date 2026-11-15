@@ -19,7 +19,29 @@ variable "cluster_name" {
 variable "kubernetes_version" {
   description = "EKS Kubernetes control-plane version."
   type        = string
-  default     = "1.33"
+  default     = "1.37"
+}
+
+# ---- v2: GPU on a managed node group ----
+# Auto Mode can't partition a GPU, so v2 runs the GPU on a managed node group
+# and installs the NVIDIA DRA driver there. Off by default until Phase 2 moves
+# vLLM onto it; the spike stack (spike.tfvars) turns it on.
+variable "enable_gpu_node_group" {
+  description = "Create the managed `gpu` node group (Bottlerocket NVIDIA, 0-1 nodes) plus the add-ons and ec2 endpoint it needs."
+  type        = bool
+  default     = false
+}
+
+variable "gpu_instance_type" {
+  description = "Instance type for the GPU node group. g5.xlarge = one A10G."
+  type        = string
+  default     = "g5.xlarge"
+}
+
+variable "gpu_data_volume_size" {
+  description = "Bottlerocket data volume (GiB) on the GPU node: the vLLM image plus two model images."
+  type        = number
+  default     = 100
 }
 
 variable "vpc_cidr" {

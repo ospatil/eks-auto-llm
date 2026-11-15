@@ -138,7 +138,7 @@ So `HF_HUB_OFFLINE` and `TRANSFORMERS_OFFLINE` are left unset, with a comment in
 
 - The vLLM image tag (`vllm_image_tag` in `terraform/variables.tf`) changes often. Check it against the [ECR Public Gallery](https://gallery.ecr.aws/deep-learning-containers/vllm) before deploying, and if you jump to a much newer version, confirm it still takes the same `vllm serve` arguments. This is AWS's build of vLLM, not Docker Hub's `vllm/vllm-openai`, but it serves the same models.
 - After the GPU node starts, confirm its label: `kubectl get nodes --show-labels | grep instance-gpu-name` should show `a10g`.
-- Pinned versions: AWS provider `~> 6.42`, `terraform-aws-modules/eks ~> 21.0`, `terraform-aws-modules/vpc ~> 5.13`, Kubernetes 1.33.
+- Pinned versions: AWS provider `~> 6.42`, `terraform-aws-modules/eks ~> 21.0`, `terraform-aws-modules/vpc ~> 5.13`, Kubernetes 1.37.
 
 ## What's where
 

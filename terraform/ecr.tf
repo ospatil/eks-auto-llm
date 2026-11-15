@@ -44,9 +44,19 @@ resource "aws_ecr_lifecycle_policy" "streamlit" {
 #     pulls over the ecr.api/ecr.dkr + S3 endpoints with only PullOnly perms.
 #
 # Cached images land in an auto-created repo named "<prefix>/<upstream-path>".
-# With prefix "ecr-public" and the DLC path, the node pull URI is:
-#   <acct>.dkr.ecr.<region>.amazonaws.com/ecr-public/deep-learning-containers/vllm:<tag>
+# With the "<project>-pub" prefix and the DLC path, the node pull URI is:
+#   <acct>.dkr.ecr.<region>.amazonaws.com/<project>-pub/deep-learning-containers/vllm:<tag>
+# Prefixes are unique per region, so they carry the project name: that lets the
+# spike stack exist next to the real one, and lets destroy.sh find every repo
+# this project created.
 resource "aws_ecr_pull_through_cache_rule" "ecr_public" {
-  ecr_repository_prefix = "ecr-public"
+  ecr_repository_prefix = "${var.project}-pub"
   upstream_registry_url = "public.ecr.aws"
+}
+
+# Same idea for registry.k8s.io, which hosts the NVIDIA DRA driver image (and
+# later the Gateway API Inference Extension images). Also unauthenticated.
+resource "aws_ecr_pull_through_cache_rule" "k8s" {
+  ecr_repository_prefix = "${var.project}-k8s"
+  upstream_registry_url = "registry.k8s.io"
 }

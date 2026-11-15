@@ -37,7 +37,7 @@ echo "Tunnel via: ${INSTANCE}  (local :${LOCAL_PORT} -> ${HOST}:443)"
 echo
 
 # Write/refresh a dedicated kubeconfig context that dials the tunnel.
-KUBECONFIG_FILE="${PWD}/kubeconfig"
+KUBECONFIG_FILE="${KUBECONFIG_FILE:-${PWD}/kubeconfig}"
 aws eks update-kubeconfig --name "$CLUSTER" --region "$REGION" \
   --kubeconfig "$KUBECONFIG_FILE" >/dev/null
 CTX="$(kubectl --kubeconfig "$KUBECONFIG_FILE" config current-context)"

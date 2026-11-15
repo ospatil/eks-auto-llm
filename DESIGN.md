@@ -34,7 +34,7 @@ One side effect: `HF_HUB_OFFLINE` must not be set. It looks like the right flag 
 
 ## Getting the image in
 
-The nodes can't pull from Docker Hub either. AWS publishes its own build of vLLM (a Deep Learning Container) on ECR Public, which needs no login. An ECR pull-through cache rule points at ECR Public, so the cluster pulls `<account>.dkr.ecr.<region>.amazonaws.com/ecr-public/deep-learning-containers/vllm:<tag>`. When the cache doesn't have the image yet, ECR fetches it from its own side, not through the VPC.
+The nodes can't pull from Docker Hub either. AWS publishes its own build of vLLM (a Deep Learning Container) on ECR Public, which needs no login. An ECR pull-through cache rule points at ECR Public, so the cluster pulls `<account>.dkr.ecr.<region>.amazonaws.com/<project>-pub/deep-learning-containers/vllm:<tag>`. When the cache doesn't have the image yet, ECR fetches it from its own side, not through the VPC.
 
 `make prewarm` does the first pull from your laptop. That creates the cache repository and fills it, so the nodes only ever read cached images and their IAM role can stay at pull-only. It also sidesteps some first-pull edge cases.
 

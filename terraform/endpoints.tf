@@ -6,9 +6,10 @@
 #   - eks-auth                    : MANDATORY for Pod Identity to issue creds privately
 #   - eks                         : EKS AWS API (control-plane mgmt, optional but tidy)
 #   - s3 (gateway)                : ECR layers AND vLLM model streaming from S3 (no NAT)
+#   - ec2 (GPU node group only)   : the VPC CNI calls the EC2 API to manage ENIs and IPs
 
 locals {
-  interface_endpoints = [
+  interface_endpoints = concat([
     "ssm",
     "ssmmessages",
     "ec2messages",
@@ -17,7 +18,7 @@ locals {
     "ecr.dkr",
     "eks-auth",
     "eks",
-  ]
+  ], var.enable_gpu_node_group ? ["ec2"] : [])
 }
 
 # Security group allowing HTTPS from inside the VPC to the interface endpoints.
