@@ -10,6 +10,9 @@
 #
 # Phase 3's scripts/package-model.sh grows out of this. Repos land under
 # <project>/spike/, which `make down SPIKE=1` deletes.
+#
+# Local test against kind: set REGISTRY (e.g. localhost:5001) and PLATFORM
+# (e.g. linux/arm64); Terraform and ECR are skipped. See spikes/local/.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -23,22 +26,37 @@ if [ "$#" -ne 2 ] || [ ! -d "$2" ]; then
   echo "usage: $0 <name> <directory>" >&2
   exit 1
 fi
+if ! docker buildx version >/dev/null 2>&1; then
+  echo "Needs docker buildx. With Homebrew: brew install docker-buildx, then add" >&2
+  echo '"cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"] to ~/.docker/config.json.' >&2
+  exit 1
+fi
 NAME="$1"
 SRC="$(cd "$2" && pwd)"
 TAG="${TAG:-$(date +%Y%m%d-%H%M%S)}"
+PLATFORM="${PLATFORM:-linux/amd64}"
 
-REGISTRY="$(tf output -raw ecr_registry)"
-PROJECT="$(tf output -raw project)"
+if [ -n "${REGISTRY:-}" ]; then
+  LOCAL=1
+  PROJECT="${PROJECT:-local}"
+else
+  LOCAL=0
+  REGISTRY="$(tf output -raw ecr_registry)"
+  PROJECT="$(tf output -raw project)"
+fi
 REPO="${PROJECT}/spike/${NAME}"
 IMAGE="${REGISTRY}/${REPO}:${TAG}"
 
-aws ecr describe-repositories --region "$REGION" --repository-names "$REPO" >/dev/null 2>&1 \
-  || aws ecr create-repository --region "$REGION" --repository-name "$REPO" >/dev/null
+if [ "$LOCAL" -eq 0 ]; then
+  aws ecr describe-repositories --region "$REGION" --repository-names "$REPO" >/dev/null 2>&1 \
+    || aws ecr create-repository --region "$REGION" --repository-name "$REPO" >/dev/null
+fi
 
 # One COPY per top-level entry. The Dockerfile goes in a temp dir and is passed
 # with -f, so the source directory is never written to.
-DOCKERFILE="$(mktemp -d)/Dockerfile"
-trap 'rm -rf "$(dirname "$DOCKERFILE")"' EXIT
+WORK="$(mktemp -d)"
+DOCKERFILE="${WORK}/Dockerfile"
+trap 'rm -rf "$WORK"' EXIT
 {
   echo "FROM scratch"
   for entry in "$SRC"/*; do
@@ -49,17 +67,19 @@ trap 'rm -rf "$(dirname "$DOCKERFILE")"' EXIT
 
 echo "Image: ${IMAGE}"
 du -sh "$SRC"
-aws ecr get-login-password --region "$REGION" \
-  | docker login --username AWS --password-stdin "$REGISTRY" >/dev/null
+if [ "$LOCAL" -eq 0 ]; then
+  aws ecr get-login-password --region "$REGION" \
+    | docker login --username AWS --password-stdin "$REGISTRY" >/dev/null
+fi
 
 # --provenance=false keeps a plain single-platform manifest, not an index with
 # an attestation, so the digest is the image itself.
 start=$(date +%s)
-docker buildx build --platform linux/amd64 --provenance=false \
+docker buildx build --platform "$PLATFORM" --provenance=false \
+  --metadata-file "${WORK}/metadata.json" \
   -f "$DOCKERFILE" -t "$IMAGE" --push "$SRC"
 echo "Build + push took $(( $(date +%s) - start ))s"
 
-DIGEST="$(aws ecr describe-images --region "$REGION" --repository-name "$REPO" \
-  --image-ids imageTag="$TAG" --query 'imageDetails[0].imageDigest' --output text)"
+DIGEST="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["containerimage.digest"])' "${WORK}/metadata.json")"
 echo
 echo "Pin as: ${REGISTRY}/${REPO}@${DIGEST}"

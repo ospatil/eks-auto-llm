@@ -13,6 +13,9 @@
 #
 # Repos are created on demand under <project>/mirror/, which `make down`
 # deletes. Uses crane if installed, otherwise skopeo.
+#
+# Local test: set REGISTRY (e.g. localhost:5001) and PROJECT to copy into a
+# plain registry; Terraform and ECR are skipped.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -35,13 +38,22 @@ else
   exit 1
 fi
 
-REGISTRY="$(tf output -raw ecr_registry)"
-PROJECT="$(tf output -raw project)"
+if [ -n "${REGISTRY:-}" ]; then
+  LOCAL=1
+  PROJECT="${PROJECT:-local}"
+else
+  LOCAL=0
+  REGISTRY="$(tf output -raw ecr_registry)"
+  PROJECT="$(tf output -raw project)"
+fi
 
-echo "Logging in to ECR with ${TOOL}…"
-if [ "$TOOL" = crane ]; then
+if [ "$LOCAL" -eq 1 ]; then
+  echo "Local registry ${REGISTRY}: skipping ECR login and repo creation."
+elif [ "$TOOL" = crane ]; then
+  echo "Logging in to ECR with crane…"
   aws ecr get-login-password --region "$REGION" | crane auth login "$REGISTRY" -u AWS --password-stdin
 else
+  echo "Logging in to ECR with skopeo…"
   aws ecr get-login-password --region "$REGION" | skopeo login "$REGISTRY" -u AWS --password-stdin
 fi
 
@@ -68,9 +80,11 @@ for src in "$@"; do
 
   echo
   echo "== ${src} -> ${dest}"
-  aws ecr describe-repositories --region "$REGION" --repository-names "$dest_repo" >/dev/null 2>&1 \
-    || aws ecr create-repository --region "$REGION" --repository-name "$dest_repo" \
-         --image-scanning-configuration scanOnPush=true >/dev/null
+  if [ "$LOCAL" -eq 0 ]; then
+    aws ecr describe-repositories --region "$REGION" --repository-names "$dest_repo" >/dev/null 2>&1 \
+      || aws ecr create-repository --region "$REGION" --repository-name "$dest_repo" \
+           --image-scanning-configuration scanOnPush=true >/dev/null
+  fi
 
   if [ "$TOOL" = crane ]; then
     crane copy "$src" "$dest"

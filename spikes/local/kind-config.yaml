@@ -1,0 +1,29 @@
+# A kind cluster shaped like the spike cluster: one worker labelled like an
+# Auto Mode node, one labelled and tainted like the GPU node group (but with
+# no GPU). Kubernetes 1.37 to match EKS. Used by spikes/local/up.sh.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: eks-auto-llm-local
+containerdConfigPatches:
+  # Let nodes pull from the local registry container (see up.sh).
+  - |-
+    [plugins."io.containerd.cri.v1.images".registry]
+      config_path = "/etc/containerd/certs.d"
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.37.0
+  - role: worker
+    image: kindest/node:v1.37.0
+    labels:
+      eks.amazonaws.com/compute-type: auto
+  - role: worker
+    image: kindest/node:v1.37.0
+    labels:
+      eks-auto-llm/gpu: node-group
+    kubeadmConfigPatches:
+      - |
+        kind: JoinConfiguration
+        nodeRegistration:
+          taints:
+            - key: nvidia.com/gpu
+              effect: NoSchedule

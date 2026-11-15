@@ -38,8 +38,19 @@ variable "gpu_instance_type" {
   default     = "g5.xlarge"
 }
 
+variable "gpu_ami_type" {
+  description = "AMI for the GPU node group. BOTTLEROCKET_x86_64_NVIDIA by default; AL2023_x86_64_NVIDIA is the fallback if the DRA driver can't find Bottlerocket's NVIDIA driver."
+  type        = string
+  default     = "BOTTLEROCKET_x86_64_NVIDIA"
+
+  validation {
+    condition     = contains(["BOTTLEROCKET_x86_64_NVIDIA", "AL2023_x86_64_NVIDIA"], var.gpu_ami_type)
+    error_message = "gpu_ami_type must be BOTTLEROCKET_x86_64_NVIDIA or AL2023_x86_64_NVIDIA."
+  }
+}
+
 variable "gpu_data_volume_size" {
-  description = "Bottlerocket data volume (GiB) on the GPU node: the vLLM image plus two model images."
+  description = "Image storage (GiB) on the GPU node: the vLLM image plus two model images. Bottlerocket's data volume, or AL2023's root volume."
   type        = number
   default     = 100
 }

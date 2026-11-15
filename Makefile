@@ -29,7 +29,7 @@ export KUBECONFIG_FILE := $(CURDIR)/kubeconfig-spike
 export LOCAL_PORT := 8444
 endif
 
-.PHONY: help preflight init up stage prewarm image tunnel deploy verify scale-down scale-up gpu-nodes down fmt validate output diagrams
+.PHONY: help preflight init up stage prewarm image tunnel deploy verify scale-down scale-up gpu-nodes down fmt validate test output diagrams
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -88,6 +88,10 @@ fmt: ## Format terraform
 
 validate: ## Validate terraform
 	$(TF) -chdir=$(TF_DIR) validate
+
+test: ## Offline plan tests for the real and spike stacks (mocked AWS, no credentials)
+	$(TF) -chdir=$(TF_DIR) init -backend=false -input=false >/dev/null
+	$(TF) -chdir=$(TF_DIR) test
 
 output: ## Show infra outputs
 	$(TF) -chdir=$(TF_DIR) output

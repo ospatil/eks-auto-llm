@@ -36,6 +36,13 @@ need aws "install AWS CLI v2"
 need kubectl "install kubectl"
 need session-manager-plugin "install the AWS SSM Session Manager plugin"
 need helm "install Helm (brew install helm) - v2 installs the NVIDIA DRA driver and the gateway with it"
+if docker buildx version >/dev/null 2>&1; then
+  green "  ✓ docker buildx found"
+else
+  red "  ✗ docker buildx NOT found - needed to build model images (brew install docker-buildx, then add"
+  red "    \"cliPluginsExtraDirs\": [\"/opt/homebrew/lib/docker/cli-plugins\"] to ~/.docker/config.json)"
+  fail=1
+fi
 if command -v crane >/dev/null 2>&1 || command -v skopeo >/dev/null 2>&1; then
   green "  ✓ crane or skopeo found"
 else

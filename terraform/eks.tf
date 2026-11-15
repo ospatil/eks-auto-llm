@@ -11,6 +11,13 @@
 
 locals {
   gpu_node_group_name = "gpu"
+  gpu_bottlerocket    = var.gpu_ami_type == "BOTTLEROCKET_x86_64_NVIDIA"
+
+  # Turns off Bottlerocket's bundled NVIDIA device plugin (1.63.0+).
+  bottlerocket_no_device_plugin = <<-EOT
+    [settings.kubelet-device-plugins.nvidia]
+    enabled = false
+  EOT
 }
 
 module "eks" {
@@ -60,7 +67,7 @@ module "eks" {
       name            = local.gpu_node_group_name
       use_name_prefix = false
 
-      ami_type       = "BOTTLEROCKET_x86_64_NVIDIA"
+      ami_type       = var.gpu_ami_type
       instance_types = [var.gpu_instance_type]
 
       # One GPU, ever. Starts empty; scale with
@@ -81,16 +88,15 @@ module "eks" {
       }
 
       # The NVIDIA DRA driver and Bottlerocket's bundled device plugin must not
-      # manage the same GPU. Needs Bottlerocket 1.63.0 or later.
-      bootstrap_extra_args = <<-EOT
-        [settings.kubelet-device-plugins.nvidia]
-        enabled = false
-      EOT
+      # manage the same GPU. Needs Bottlerocket 1.63.0 or later. The AL2023
+      # NVIDIA AMI ships no device plugin, so it needs nothing here.
+      bootstrap_extra_args = local.gpu_bottlerocket ? local.bottlerocket_no_device_plugin : null
 
-      # Bottlerocket keeps images on the data volume (xvdb), not the root one.
+      # Bottlerocket keeps images on its data volume (xvdb); AL2023 on its
+      # root volume (xvda).
       block_device_mappings = {
-        xvdb = {
-          device_name = "/dev/xvdb"
+        images = {
+          device_name = local.gpu_bottlerocket ? "/dev/xvdb" : "/dev/xvda"
           ebs = {
             volume_size           = var.gpu_data_volume_size
             volume_type           = "gp3"

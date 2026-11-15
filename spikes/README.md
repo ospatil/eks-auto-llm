@@ -4,6 +4,21 @@ Three throwaway experiments from [the v2 plan](../docs/v2-plan.md#phase-0-spikes
 
 The spike stack is the real Terraform with [`spike.tfvars`](../terraform/spike.tfvars): its own workspace and project name, the GPU node group switched on. Add `SPIKE=1` to every `make` target.
 
+## Local checks first (free)
+
+Before spending anything, run what can run without AWS or a GPU:
+
+```bash
+make test                 # offline Terraform plan tests (mocked AWS)
+spikes/local/up.sh        # kind 1.37 + local registry, shaped like the spike cluster
+spikes/local/verify.sh    # the scripts and manifests against it; PASS/FAIL per check
+spikes/local/down.sh
+```
+
+`verify.sh` proves the image scripts, that a 1.37 API server accepts every manifest, image volume mounts (whole, `subPath`, read-only) on containerd 2.x, pod placement by node type, and the DRA chart's placement and image path. It can't prove anything about Auto Mode, Bottlerocket, endpoints, ECR, pull times or the GPU.
+
+`push-image.sh` needs `docker buildx`. If your default builder is a `docker-container` one, pushing to ECR still works, but the 15 GB build context gets copied into the builder container first; `BUILDX_BUILDER=<your docker context>` uses the daemon directly.
+
 ## Bring it up
 
 ```bash
@@ -100,11 +115,20 @@ kubectl -n spike get pods -l spike=vllm-pair -w
 kubectl -n spike exec vllm-a -- nvidia-smi
 ```
 
+If the driver's init container keeps logging `nvidia-smi: not found, libnvidia-ml.so.1: not found`, it can't find Bottlerocket's NVIDIA driver under `nvidiaDriverRoot: /`. (AWS's docs disagree on whether the DRA driver supports Bottlerocket at all.) Look for the files on the node:
+
+```bash
+kubectl debug node/<gpu node> -it --image="$REG/eks-auto-llm-spike-pub/docker/library/busybox:1.37" -- \
+  sh -c 'find /host -name libnvidia-ml.so.1 -o -name nvidia-smi 2>/dev/null'
+```
+
+If they sit under one root, set `nvidiaDriverRoot` to it and upgrade the release. If not, switch the node group to AL2023, which has no bundled device plugin: add `gpu_ami_type = "AL2023_x86_64_NVIDIA"` to `spike.tfvars`, `make up SPIKE=1`, and record the switch.
+
 If MPS doesn't work, delete the claim and pods, apply `claim-timeslicing.yaml`, and repeat.
 
 Record:
 
-- [ ] The driver's pods run, and the GPU shows up in a `ResourceSlice`.
+- [ ] The driver's pods run, and the GPU shows up in a `ResourceSlice`. If not, where Bottlerocket keeps `libnvidia-ml.so.1`, and whether AL2023 was needed.
 - [ ] How much each memory-test pod allocated. Did `CUDA_MPS_PINNED_DEVICE_MEM_LIMIT` lower the cap, raise it, or neither? This decides whether chat and embedding can have different caps on one claim.
 - [ ] `nvidia-smi` shows both processes on one GPU.
 - [ ] Both vLLM servers become Ready, and what memory each reports in its startup log.

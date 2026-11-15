@@ -147,3 +147,19 @@ run "spike_stack" {
     error_message = "spike bucket should carry the spike project name"
   }
 }
+
+run "spike_stack_al2023_fallback" {
+  command = plan
+
+  variables {
+    project               = "eks-auto-llm-spike"
+    cluster_name          = "eks-auto-llm-spike"
+    enable_gpu_node_group = true
+    gpu_ami_type          = "AL2023_x86_64_NVIDIA"
+  }
+
+  assert {
+    condition     = contains(keys(module.eks.eks_managed_node_groups), "gpu")
+    error_message = "the AL2023 fallback should still plan the gpu node group"
+  }
+}

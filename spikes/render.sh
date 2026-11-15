@@ -13,8 +13,9 @@
 #   __WEIGHTS_IMAGE__  $WEIGHTS_IMAGE, printed by spikes/push-image.sh
 #   __SMALL_IMAGE__    $SMALL_IMAGE, printed by spikes/push-image.sh
 #
-# Run with the same environment as `make ... SPIKE=1` (TF_WORKSPACE=spike), or
-# it reads the real stack's outputs.
+# Reads the spike stack's outputs (TF_WORKSPACE defaults to spike). For a local
+# test against kind, set REGISTRY, PROJECT and VLLM_IMAGE instead; Terraform is
+# skipped. See spikes/local/.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -23,12 +24,15 @@ export TF_WORKSPACE="${TF_WORKSPACE:-spike}"
 
 tf() { if command -v tofu >/dev/null 2>&1; then tofu -chdir="$TF_DIR" "$@"; else terraform -chdir="$TF_DIR" "$@"; fi; }
 
-REGISTRY="$(tf output -raw ecr_registry)"
-PROJECT="$(tf output -raw project)"
+if [ -z "${REGISTRY:-}" ]; then
+  REGISTRY="$(tf output -raw ecr_registry)"
+  PROJECT="$(tf output -raw project)"
+  VLLM_IMAGE="$(tf output -raw vllm_image_uri)"
+fi
 
 sed -e "s|__PUB__|${REGISTRY}/${PROJECT}-pub|g" \
     -e "s|__K8S__|${REGISTRY}/${PROJECT}-k8s|g" \
-    -e "s|__VLLM_IMAGE__|$(tf output -raw vllm_image_uri)|g" \
+    -e "s|__VLLM_IMAGE__|${VLLM_IMAGE:-__VLLM_IMAGE_NOT_SET__}|g" \
     -e "s|__HELLO_IMAGE__|${HELLO_IMAGE:-__HELLO_IMAGE_NOT_SET__}|g" \
     -e "s|__WEIGHTS_IMAGE__|${WEIGHTS_IMAGE:-__WEIGHTS_IMAGE_NOT_SET__}|g" \
     -e "s|__SMALL_IMAGE__|${SMALL_IMAGE:-__SMALL_IMAGE_NOT_SET__}|g" "$1"

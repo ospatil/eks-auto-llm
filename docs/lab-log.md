@@ -26,6 +26,20 @@ Open questions the spikes should answer:
 - Do pods on node-group nodes resolve DNS without the `coredns` add-on?
 - Does the Auto Mode Bottlerocket variant run containerd 2.2 (needed for image volume `subPath`)?
 - Is the node group's Bottlerocket release 1.63.0 or later?
+- Does the DRA driver find Bottlerocket's NVIDIA driver under `nvidiaDriverRoot: /`, or is AL2023 needed?
+
+## 2026-11-15: local verification (no cloud)
+
+- `make test`: three offline plan tests against a mocked AWS provider (real stack, spike stack, spike stack on AL2023). They check the flag wiring, names, prefixes, endpoints, node group shape, the Bottlerocket user data and the image volume. All pass.
+- `spikes/local/verify.sh` on kind 1.37.0 (containerd 2.3.4, arm64), with one worker labelled like Auto Mode and one like the node group: 33 checks, all pass.
+  - Image volumes mount whole, with `subPath`, and read-only on both workers. A five-file "model" became five layers.
+  - `mirror-image.sh` keeps the upstream digest.
+  - Every spike manifest passes server-side validation, including the `resource.k8s.io/v1` claims.
+  - The DRA chart (0.5.1) with our values puts its kubelet plugin only on the node-group worker, pulls from the `<project>-k8s` prefix, and creates the `gpu.nvidia.com` DeviceClass. Its controller isn't deployed with compute domains off. The MPS control daemon reuses the same image (`IMAGE_NAME`), so nothing else needs caching.
+- Found locally:
+  - `docker buildx` was installed but not registered with the Docker CLI. Preflight now checks for it.
+  - A `docker-container` buildx builder can't push to a registry on the host's `localhost`. That only affects the local test, which uses the daemon's builder.
+  - The driver's init container waits for `nvidia-smi` and `libnvidia-ml.so.1` under `nvidiaDriverRoot`. Where Bottlerocket keeps them is unconfirmed, and AWS's docs disagree on whether the DRA driver supports Bottlerocket. Added `gpu_ami_type = "AL2023_x86_64_NVIDIA"` as a one-line fallback.
 
 ## Spike results
 
