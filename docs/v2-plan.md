@@ -119,6 +119,9 @@ Prove the three risky assumptions on a throwaway cluster before changing the rea
 
 - [ ] Install Istio with the Inference Extension enabled and change the `GatewayClass`. The `HTTPRoute` and `InferencePool` objects should not change; note anything that did.
 - [ ] Compare the two in DESIGN.md: images to mirror, pods and memory used, features (mesh mTLS, ambient mode) and maturity of each one's extension support.
+- Two Istio traps to check, from the Istio docs (checked 2026-11-19 against Istio 1.32):
+  - **Ambient mode skips L7 rules without a waypoint.** ztunnel enforces only L4, so a rule on paths, methods or JWTs needs a waypoint proxy. Without one, an `ALLOW` rule with L7 attributes never matches, and a `DENY` rule with only L7 attributes "does not block any traffic". ([ambient L4 policy](https://istio.io/latest/docs/ambient/usage/l4-policy/))
+  - **A `RequestAuthentication` alone lets token-less requests through.** It rejects invalid JWTs, but "requests without tokens are accepted". Requiring a token takes an `AuthorizationPolicy` that denies `notRequestPrincipals: ["*"]`. Keep this in mind if Istio JWT checks replace agentgateway's API key. ([authentication policy](https://istio.io/latest/docs/tasks/security/authentication/authn-policy/))
 - **Done when:** the same routes work through Istio, and the comparison is written down.
 
 ## Phase 7: docs and merge
